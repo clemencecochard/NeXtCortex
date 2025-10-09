@@ -45,7 +45,7 @@ SNN.@load_units
 
 # %%
 # Define network configuration parameters
-import SpikingNeuralNetworks: IFSinExpParameter, IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population
+import SpikingNeuralNetworks: IFSinExpParameter, IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population, PostSpike
 
 Zerlaut2019_network = (
     # Number of neurons in each population
@@ -58,7 +58,6 @@ Zerlaut2019_network = (
                 Vt = -50.0mV,       # Spike threshold
                 Vr = -70.0f0mV,     # Reset potential
                 R  = 1/10nS,        # Membrane resistance
-                τabs = 2ms,         # Absolute refractory period
                 ),
 
     # Parameters for inhibitory neurons
@@ -68,8 +67,9 @@ Zerlaut2019_network = (
                 Vt = -53.0mV,       # Spike threshold
                 Vr = -70.0f0mV,     # Reset potential
                 R  = 1/10nS,        # Membrane resistance
-                τabs = 2ms,         # Absolute refractory period
                 ),
+
+    spike = PostSpike(τabs = 2ms),         # Absolute refractory period
 
     # Synaptic properties
     synapse = SingleExpSynapse(
@@ -103,11 +103,11 @@ Zerlaut2019_network = (
 # %%
 # Function to create the network
 function network(config)
-    @unpack afferents, connections, Npop, synapse, exc, inh = config
+    @unpack afferents, connections, Npop, synapse, spike, exc, inh = config
 
     # Create neuron populations
-    E = Population(exc, synapse, N=Npop.E, name="E")  # Excitatory population
-    I = Population(inh, synapse, N=Npop.I, name="I")  # Inhibitory population
+    E = Population(exc; synapse, spike, N=Npop.E, name="E")  # Excitatory population
+    I = Population(inh; synapse, spike, N=Npop.I, name="I")  # Inhibitory population
 
     # Create external Poisson input
     AfferentParam = PoissonLayer(rate=afferents.rate, N=afferents.N)
