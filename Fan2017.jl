@@ -353,6 +353,14 @@ function calculate_ff_ratio_from_pop(model, state_window)
     return ff_inhibition / (ff_excitation + 1e-9)
 end
 
+# Define time windows for each phase (in seconds)
+state_windows = Dict(
+    :normal => (0s, 2s),
+    :pre_seizure => (2s, 3.5s),
+    :seizure => (3.5s, 5.5s),
+    :recovery => (5.5s, 7s)
+)
+
 # Compute for all states
 ff_ratios = Dict()
 for (state, window) in state_windows
@@ -363,3 +371,4 @@ println("\nFeedforward Inhibition/Excitation Ratios:")
 for (state, ratio) in ff_ratios
     println("$state: $(round(ratio,digits=3))")
 end
+
