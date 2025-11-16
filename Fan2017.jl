@@ -363,7 +363,7 @@ state_windows = Dict(
 
 # Compute for all states
 ff_ratios = Dict()
-for (state, window) in state_windows
+for (state, window) in state_window
     ff_ratios[state] = calculate_ff_ratio_from_pop(model, window)
 end
 
