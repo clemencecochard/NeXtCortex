@@ -1,29 +1,85 @@
-## Network Model example
+<div align="center">
+    <img src="https://github.com/JuliaSNN/SpikingNeuralNetworks.jl/blob/main/docs/src/assets/SNNLogo.svg" alt="SpikingNeuralNetworks.jl" width="200">
+</div>
 
-This repository contains a minimal setup to reproduce the Zerlaut 2019 reults with JuliaSNN.
+<h2 align="center"> Models, types, and functions for Julia SpikingNeuralNetworks.jl 
+<p align="center">
+    <a href="https://github.com/JuliaSNN/SNNModels.jl/actions">
+    <img src="https://github.com/JuliaSNN/SNNModels.jl/workflows/CI/badge.svg"
+         alt="Build Status">
+  </a>
+  <a href="https://juliasnn.github.io/SpikingNeuralNetworks.jl/dev/">
+    <img src="https://img.shields.io/badge/docs-stable-blue.svg"
+         alt="stable documentation">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yelllow"
+       alt="bibtex">
+  </a>
 
-Use it as the starting point for the research projects.
+</p>
+</h2>
 
-### Installing
 
-To reproduce this project, do the following:
+# SNNModels
 
-Download this code base via git.  
+The package is the Base package of [SpikingNeuralNetworks.jl](https://github.com/JuliaSNN/SpikingNeuralNetworks.jl). It contains model types and core functionalities for the SpikingNeuralNetworks.jl ecosystem.
 
-Open a Julia console and do:
+## Documentation
+
+The package defines models and parameters for `Population`, `Connection`, and `Stimulus`:
+
+- `Population <: AbstractPopulation`
+- `Connection <: AbstractConnection`
+- `Stimulus <: AbstractStimulus`
+- `PopulationParameter <: AbstractPopulationParameter`
+- `ConnectionParameter <: AbstractConnectionParameter`
+- `StimulusParameter <: AbstractStimulusParameter`
+- `SpikeTimes = Vector{Vector{Float32}}`.
+
+Populations, connections, and stimuli are defined under the respective folders in `src`
+
+Under `src/utils`, the package defines macros and functions that support the functionalities of the SpikingNeuralNetwork.jl ecosystem:
+
+- `struct.jl` defines the abstract model types.
+- `main.jl` defines the `sim!` and `train!` functions that run the network simulations. 
+- `io.jl` defines functions to save and load models using `.jld2` format.
+- `record.jl` implements the recording ofthe  model's variables during simulation time.
+- `macros.jl` implements useful macros to define model types and update parameter structs.
+- `spatial.jl` defines functions to create spatial network arrangements.
+- `unit.jl` defines convenient shortcut for _cgm_ unit system.
+- `util.jl` add functions to manipulate sparse matrix representations.
+
+## Functioning
+
+The library leverages Julia multidispatching to run models of types ` <: AbstractPopulation`,
+`<: AbstractConnection`, and `AbstractStimulus`. 
+
+```julia
+function sim!(p::Vector{AbstractPopulation}, c::Vector{AbstractConnection}, duration<:Real) end
+function train!(p::Vector{AbstractConnection}, c:Vector{AbstractConnection}, duration<:Real) end
+```
+
+The functions support simulation with and without neural plasticity; the model is defined within the arguments passed to the functions. 
+Models are composed of 'AbstractPopulation' and 'AbstractConnection' arrays. 
+
+Any elements of `AbstractPopulation` must implement the methods: 
+```julia
+function integrate!(p, p.param, dt) end
+function plasticity!(p, p.param, dt, T) end
 
 ```
-julia> using Pkg
-julia> Pkg.add("DrWatson") # install globally, for using `quickactivate`
-julia> Pkg.activate("path/to/this/project")
-julia> Pkg.instantiate()
+
+`AbstractConnection` must implement the methods: 
+
+```julia
+function forward!(p, p.param) end
+function plasticity!(c, c.param, dt) end
 ```
 
-This will install all necessary packages for you to be able to run the scripts, and everything should work out of the box, including correctly finding local paths.
 
-### Usage
+`AbstractStimulus` must implement the methods: 
 
-The file `Zerlaut2019.jl` can be run via the interactive REPL in VSCode, in this case the simulation results are output on the Plot pane.
-
-The code is structured such that it can also be run in a Jupyter notebook. To do this, you can install the jupyter notebook extension of VSCode and by right clicking on the file you should have the entry 
-`open as Jupyter Notebook`
+```julia
+function stimulate!(p, p.param) end
+```

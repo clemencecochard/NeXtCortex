@@ -1,4 +1,5 @@
+.vscode
 Manifest.toml
-.Notebooks
-.notebooks
-
+docs/build
+docs/.DS_Store
+.DS_Store
