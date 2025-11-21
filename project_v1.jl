@@ -209,10 +209,10 @@ SNN.vecplot(model.pop.CE, :v, neurons=13,
 
 # %%
 
-
+# Function to test different neuron parameters
 config_test_inh_short = SNN.@update TC3inhib_network begin
     inh_PV = IFParameter(       # PV：faster
-        τm=50pF / 10nS,      # Membrane time constant
+        τm=50pF / 10nS,         # Membrane time constant
         El=-70mV,
         Vt=-53mV,
         Vr=-70mV,
@@ -221,7 +221,7 @@ config_test_inh_short = SNN.@update TC3inhib_network begin
 end
 
 
-
+# Function to change the sample resolution of the plots
 pop_spiketimes = SNN.spiketimes(model.pop.CE)
 subsample = pop_spiketimes[1:10:end]
 SNN.STTC(subsample, 10ms)
