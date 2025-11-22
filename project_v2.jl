@@ -208,7 +208,7 @@ SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
 
 # %%
 # Measure the onset of epileptic activity (STTC)
-myspikes = SNN.spiketimes(population)[1:5:end]      # Subsample: only 1 every 5
+myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
 sttc_value = mean(SNN.STTC(myspikes, 50ms))
 
 # %% [markdown]
