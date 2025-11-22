@@ -257,8 +257,12 @@ config_test_inh_short = SNN.@update TC3inhib_network begin
     CortVip_to_CortSst= (p = 0.3, μ = 10nS,  rule=:Fixed)  
 end
 
-# Visualize the spiking activity of the network with the new parameters.
+# Measure the onset of epileptic activity (STTC)
+myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
+sttc_value = mean(SNN.STTC(myspikes, 50ms))
 
+# Visualize the spiking activity of the network with the new parameters.
+#
 # %%
 # Plot raster plot of the new network activity
 SNN.raster(model.pop, every=1,
