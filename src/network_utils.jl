@@ -99,20 +99,24 @@ function run_condition(config; target, μ_scale=1.0, p_scale=1.0)
     model = build_network(newconfig)
     sim!(model, 3s)
 
-    spikes = SNN.spiketimes(model.pop.CE)[1:5:end]
-    spikes = filter(!isempty, spikes)  # remove empty spike trains
+    spikes = SNN.spiketimes(model.pop.CE)[1:5:end]  # seulement CortExc
+    spikes = filter(!isempty, spikes)
     return mean(STTC(spikes, 50ms))
 end
+
 
 # -------------------------------------------------------------------
 # Average firing rate helper
 # -------------------------------------------------------------------
-function average_firing_rate(model)
-    spks = SNN.spiketimes(model.pop.CE)
-    spks = filter(!isempty, spks)  # remove empty spike trains
-    rates = firing_rate(spks)
-    return mean(rates)
+function average_firing_rate(model; pops=[:CE])
+    spks_all = []
+    for p in pops
+        spks = SNN.spiketimes(getfield(model.pop, p))  # sélectionne la population
+        append!(spks_all, filter(!isempty, spks))
+    end
+    return mean(firing_rate(spks_all))
 end
+
 
 # -------------------------------------------------------------------
 # Parameter sweep over μ and p for CortExc -> ThalExc feedback

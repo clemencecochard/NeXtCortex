@@ -148,6 +148,7 @@ TC3inhib_network = (
 # %%
 # Create and simulate the network
 model = NetworkUtils.build_network(TC3inhib_network)
+
 SNN.print_model(model)                      # Print model summary
 SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
 SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
