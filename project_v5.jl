@@ -148,7 +148,6 @@ TC3inhib_network = (
 # %%
 # Create and simulate the network
 model = NetworkUtils.build_network(TC3inhib_network)
-
 SNN.print_model(model)                      # Print model summary
 SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
 SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
@@ -190,7 +189,7 @@ SNN.STTC(subsample, 10ms)
 #%%
 
 # %% [markdown]
-# VIP→SST modulation effect on synchrony
+# VIP→SST Modulation Experiment
 
 base = TC3inhib_network.connections
 
@@ -222,37 +221,15 @@ end
 
 M = [results[(μ=μ,p=p)] for μ in μ_scales, p in p_scales]
 
-heatmap(
-    p_scales, μ_scales,
-    M,
-    xlabel="p scale",
-    ylabel="μ scale",
-    title="VIP→SST modulation effect on synchrony"
-)
 
 # %% [markdown]
-# CortExc_to_ThalExc modulation effect on synchrony
+# Cortical Feedback to Thalamus Sweep
 
-μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]  # factor of base synaptic weight
-p_scales = [0.05, 0.1, 0.2, 0.3]      # connection probability
+μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]
+p_scales = [0.05, 0.1, 0.2, 0.3]
 
-
-# Sweep for network WITH feedback
-results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network;
-    μ_scales=μ_scales, p_scales=p_scales)
-
-# Sweep for network WITHOUT feedback
-config_no_feedback = @update TC3inhib_network begin
-    connections = merge(TC3inhib_network.connections,
-                        (:CortExc_to_ThalExc => (p=0.0, μ=0nS, rule=:Fixed),))
-end
-
-results_without = NetworkUtils.sweep_TC_feedback(config_no_feedback;
-    μ_scales=μ_scales, p_scales=p_scales)
-
-
-
-
+# Network with feedback
+#results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network; μ_scales=μ_scales, p_scales=p_scales)
 
 
 # Measure the onset of epileptic activity (STTC)

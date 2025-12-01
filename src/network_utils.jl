@@ -144,3 +144,55 @@ function sweep_TC_feedback(config; μ_scales, p_scales)
 end
 
 end # module
+
+
+# -------------------------------------------------------------------
+# Compute STTC over time
+# -------------------------------------------------------------------
+function sttc_over_time(spikes; window=100ms, step=100ms, total=3s)
+    times = 0:step:(total - window)
+    sttcs = Float64[]
+
+    for t in times
+        # extract spikes in [t, t+window]
+        local_spikes = [
+            filter(s -> t <= s <= t + window, neuron_spikes)
+            for neuron_spikes in spikes
+        ]
+        local_spikes = filter(!isempty, local_spikes)
+
+        push!(sttcs, mean(STTC(local_spikes, 50ms)))
+    end
+
+    return collect(times), sttcs
+end
+
+
+function sweep_sttc_time(config; μ_scales=[1.0], p_scales=[1.0], 
+                         window=100ms, step=100ms, total=3s)
+
+    M = Dict()   # maps (μ,p) → STTC vector
+    tvals = nothing
+
+    for μ in μ_scales, p in p_scales
+        key = (μ=μ, p=p)
+
+        sttc = run_condition(config; 
+            target=:CortVip_to_CortSst, μ_scale=μ, p_scale=p)
+
+        # Build model AGAIN to extract full spiketimes
+        model = build_network(config)
+        sim!(model, total)
+
+        spikes = SNN.spiketimes(model.pop.CE)[1:5:end]
+        spikes = filter(!isempty, spikes)
+
+        # sliding window STTC
+        times, sttc_vec = sttc_over_time(spikes; window, step, total)
+
+        M[key] = sttc_vec
+        tvals = times
+    end
+
+    return tvals, M
+end

@@ -189,9 +189,7 @@ SNN.STTC(subsample, 10ms)
 #%%
 
 # %% [markdown]
-# This section is to test the different values and hypothesis.
-#
-# Function to test different neuron parameters
+# VIP→SST Modulation Experiment
 
 base = TC3inhib_network.connections
 
@@ -230,6 +228,7 @@ heatmap(
     ylabel="μ scale",
     title="VIP→SST modulation effect on synchrony"
 )
+
 
 # Measure the onset of epileptic activity (STTC)
 myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
