@@ -91,7 +91,7 @@ TC3inhib_network = (
         E_i = -80mV,          # Inhibitory reversal potential
         E_e = 0mV             # Excitatory reversal potential
     ),
-    synapse_PV  = SingleExpSynapse(τi = 3ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
+    synapse_PV  = SingleExpSynapse(τi = 20ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_SST = SingleExpSynapse(τi = 12ms, τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_VIP = SingleExpSynapse(τi = 7ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
 
@@ -221,6 +221,13 @@ end
 
 M = [results[(μ=μ,p=p)] for μ in μ_scales, p in p_scales]
 
+heatmap(
+    p_scales, μ_scales,
+    M,
+    xlabel="p scale",
+    ylabel="μ scale",
+    title="VIP→SST modulation effect on synchrony"
+)
 
 # %% [markdown]
 # Cortical Feedback to Thalamus Sweep
@@ -235,6 +242,25 @@ p_scales = [0.05, 0.1, 0.2, 0.3]
 # Measure the onset of epileptic activity (STTC)
 myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
 sttc_value = mean(SNN.STTC(myspikes, 50ms))
+
+#STTC over time
+
+μ_scales = [0.5, 1.0, 1.5, 2.0]
+
+tvals, result = NetworkUtils.sweep_sttc_time(TC3inhib_network; μ_scales=μ_scales)
+
+# build matrix: rows=time, columns=scaling
+H = hcat([result[(μ=μ,p=1.0)] for μ in μ_scales]...)
+
+heatmap(
+    tvals ./ 1s,    # convert to seconds
+    μ_scales,
+    H', #transpose H
+    xlabel="Time (s)",
+    ylabel="μ scaling",
+    title="STTC Over Time for VIP→SST Scaling",
+    colorbar_title="STTC"
+)
 
 # Visualize the spiking activity of the network with the new parameters.
 #

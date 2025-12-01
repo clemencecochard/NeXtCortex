@@ -9,7 +9,7 @@ SNN.@load_units
 
 import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
 
-export scaled_connection, build_network, run_condition, sweep_parameters, sweep_TC_feedback
+export scaled_connection, build_network, run_condition, sweep_parameters, sweep_TC_feedback, sweep_sttc_time, sttc_over_time
 
 # -------------------------------------------------------------------
 # Scale a connection tuple (probability & weight)
@@ -143,7 +143,6 @@ function sweep_TC_feedback(config; μ_scales, p_scales)
     return results
 end
 
-end # module
 
 
 # -------------------------------------------------------------------
@@ -161,9 +160,13 @@ function sttc_over_time(spikes; window=100ms, step=100ms, total=3s)
         ]
         local_spikes = filter(!isempty, local_spikes)
 
-        push!(sttcs, mean(STTC(local_spikes, 50ms)))
+        if !isempty(local_spikes)
+            push!(sttcs, mean(STTC(local_spikes, 50ms)))
+        else
+            push!(sttcs, NaN)  # or 0.0 if you prefer
+        end
     end
-
+    
     return collect(times), sttcs
 end
 
@@ -196,3 +199,5 @@ function sweep_sttc_time(config; μ_scales=[1.0], p_scales=[1.0],
 
     return tvals, M
 end
+
+end # module

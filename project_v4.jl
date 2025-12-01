@@ -91,7 +91,7 @@ TC3inhib_network = (
         E_i = -80mV,          # Inhibitory reversal potential
         E_e = 0mV             # Excitatory reversal potential
     ),
-    synapse_PV  = SingleExpSynapse(τi = 3ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
+    synapse_PV  = SingleExpSynapse(τi = 20ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_SST = SingleExpSynapse(τi = 12ms, τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_VIP = SingleExpSynapse(τi = 7ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
 
