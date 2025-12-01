@@ -91,7 +91,7 @@ TC3inhib_network = (
         E_i = -80mV,          # Inhibitory reversal potential
         E_e = 0mV             # Excitatory reversal potential
     ),
-    synapse_PV  = SingleExpSynapse(τi = 20ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
+    synapse_PV  = SingleExpSynapse(τi = 5ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_SST = SingleExpSynapse(τi = 12ms, τe = 5ms, E_i = -80mV, E_e = 0mV),
     synapse_VIP = SingleExpSynapse(τi = 7ms,  τe = 5ms, E_i = -80mV, E_e = 0mV),
 
@@ -102,7 +102,7 @@ TC3inhib_network = (
         ThalExc_to_CortExc = (p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv = (p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc = (p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortExc = (p=0.15, μ=2nS, rule=:Fixed),
         CortExc_to_CortPv = (p=0.05, μ=2nS, rule=:Fixed),
         CortExc_to_ThalExc = (p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
@@ -203,7 +203,7 @@ config_test = @update TC3inhib_network begin
 end
 
 
-μ_scales = [0.5, 1.0, 1.5, 2.0]
+μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 10]
 p_scales = [0.7, 1.0, 1.3]
 
 results = Dict{NamedTuple,Float64}()
