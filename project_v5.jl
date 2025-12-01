@@ -222,7 +222,8 @@ end
 M = [results[(μ=μ,p=p)] for μ in μ_scales, p in p_scales]
 
 heatmap(
-    p_scales, μ_scales,
+    p_scales, 
+    μ_scales,
     M,
     xlabel="p scale",
     ylabel="μ scale",
