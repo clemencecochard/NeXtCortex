@@ -99,7 +99,7 @@ function run_condition(config; target, μ_scale=1.0, p_scale=1.0)
     model = build_network(newconfig)
     sim!(model, 3s)
 
-    spikes = SNN.spiketimes(model.pop.CE)[1:5:end]  # seulement CortExc
+    spikes = SNN.spiketimes(model.pop.CE)[1:5:end]  # only CortExc
     spikes = filter(!isempty, spikes)
     return mean(STTC(spikes, 50ms))
 end
