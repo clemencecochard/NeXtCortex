@@ -150,7 +150,7 @@ TC3inhib_network = (
 model = NetworkUtils.build_network(TC3inhib_network)
 SNN.print_model(model)                      # Print model summary
 SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
-SNN.sim!(model, duration=1s)                # Simulate for 3 seconds nfweifbiuwfnw
+SNN.sim!(model, duration=1s)                # Simulate for 3 seconds (change for 1s to run the tests)
 
 # %%
 # Measure the onset of epileptic activity (STTC)
@@ -267,13 +267,14 @@ heatmap(
 # %%
 # Plot raster plot of the new network activity
 SNN.raster(model.pop, every=1,
-    title = "Raster plot of the network for p=0.025, μ=10nS")    # Change the parameters accordingly
+    title = "Raster plot of 'epileptic-like' activity configuration
+    CortExc_to_CortExc = (p=0.15, μ=2nS)")                           # Change the parameters accordingly
 
 # %%
 
 # Plot vector field plot of the new network activity
 SNN.vecplot(model.pop.CE, :v, neurons=13,
-    title = "Vecplot of the network for p=0.025, μ=10nS",        # Change the parameters accordingly
+    title = "Vecplot of the network for p=0.025, μ=10nS",           # Change the parameters accordingly
     xlabel = "Time (s)",
     ylabel = "Potential (mV)",
     lw=2,
