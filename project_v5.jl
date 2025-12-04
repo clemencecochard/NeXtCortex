@@ -281,3 +281,4 @@ SNN.vecplot(model.pop.CE, :v, neurons=13,
     c=:darkcyan)
 
 # %%
+# test 
