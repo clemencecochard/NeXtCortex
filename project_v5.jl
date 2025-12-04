@@ -149,7 +149,7 @@ TC3inhib_network = (
 model = NetworkUtils.build_network(TC3inhib_network)
 SNN.print_model(model)                      # Print model summary
 SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
-SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
+SNN.sim!(model, duration=1s)                # Simulate for 3 seconds
 
 # %%
 # Measure the onset of epileptic activity (STTC)
@@ -203,14 +203,13 @@ config_test = @update TC3inhib_network begin
 end
 
 
-μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 10]
-p_scales = [0.7, 1.0, 1.3]
+μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
+p_scales = [0.1, 0.2, 0.7, 1.0, 1.3]
 
 results = Dict{NamedTuple,Float64}()
 
 for μ in μ_scales, p in p_scales
-    key = (μ=μ, p=p)
-    results[key] = NetworkUtils.run_condition(
+    results[(μ, p)] = NetworkUtils.run_condition(
         TC3inhib_network;
         target=:CortVip_to_CortSst,
         μ_scale=μ,
