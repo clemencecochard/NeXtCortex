@@ -89,7 +89,7 @@ TC3inhib_network = (
         E_i=-80mV,          # Inhibitory reversal potential
         E_e=0mV             # Excitatory reversal potential
     ),
-    synapse_PV=SingleExpSynapse(τi=25ms, τe=5ms, E_i=-80mV, E_e=0mV),
+    synapse_PV=SingleExpSynapse(τi=3ms, τe=5ms, E_i=-80mV, E_e=0mV),
     synapse_SST=SingleExpSynapse(τi=12ms, τe=5ms, E_i=-80mV, E_e=0mV),
     synapse_VIP=SingleExpSynapse(τi=7ms, τe=5ms, E_i=-80mV, E_e=0mV),
 
@@ -100,7 +100,7 @@ TC3inhib_network = (
         ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc=(p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortExc=(p=0.15, μ=2nS, rule=:Fixed),
         CortExc_to_CortPv=(p=0.05, μ=2nS, rule=:Fixed),
         CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
@@ -174,9 +174,43 @@ p5 = SNN.vecplot(model.pop.TE, :v, neurons=1, title="ThalExc", c=:blue)
 plot(p1, p2, p3, p4, p5, layout=(5, 1), link=:x, size=(2000, 1800),
     xlabel="Time (s)", ylabel="Membrane potential (mV)")
 # %%
-# Compute average firing rate of the excitatory population
-avg_firing_rate_CE = mean(SNN.firing_rate(model.pop.CE))
-@info "Average firing rate of Cortical Excitatory Neurons: $(round(avg_firing_rate_CE, digits=2)) Hz"
+# Plot Firing rates of neuron subtypes in one figure
+time_axis = 0:20:3000
+# === CE ===
+rates_CE = SNN.firing_rate(model.pop.CE, time_axis, sampling=20ms, τ=25ms)
+rates_CE_mat = rates_CE[1]
+t = collect(rates_CE[2]) ./ 1000   # 秒
+pop_CE = vec(mean(rates_CE_mat, dims=1))
+# === PV ===
+rates_PV = SNN.firing_rate(model.pop.PV, time_axis, sampling=20ms, τ=25ms)
+rates_PV_mat = rates_PV[1]
+pop_PV = vec(mean(rates_PV_mat, dims=1))
+
+# === SST ===
+rates_SST = SNN.firing_rate(model.pop.SST, time_axis, sampling=20ms, τ=25ms)
+rates_SST_mat = rates_SST[1]
+pop_SST = vec(mean(rates_SST_mat, dims=1))
+
+# === VIP ===
+rates_VIP = SNN.firing_rate(model.pop.VIP, time_axis, sampling=20ms, τ=25ms)
+rates_VIP_mat = rates_VIP[1]
+pop_VIP = vec(mean(rates_VIP_mat, dims=1))
+
+# === TE (Thalamic Exc) ===
+rates_TE = SNN.firing_rate(model.pop.TE, time_axis, sampling=20ms, τ=25ms)
+rates_TE_mat = rates_TE[1]
+pop_TE = vec(mean(rates_TE_mat, dims=1))
+# Plot all populations together
+
+plot(t, pop_CE, lw=2, label="CortExc (CE)")
+plot!(t, pop_PV, lw=2, label="CortPV (PV)")
+plot!(t, pop_SST, lw=2, label="CortSST (SST)")
+plot!(t, pop_VIP, lw=2, label="CortVIP (VIP)")
+plot!(t, pop_TE, lw=2, label="ThalExc (TE)")
+
+xlabel!("Time (s)")
+ylabel!("Population firing rate (Hz)")
+title!("Population firing rates of all subtypes")
 
 # Plot raster plot of network activity
 SNN.raster(model.pop, every=1,
