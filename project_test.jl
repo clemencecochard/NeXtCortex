@@ -1,5 +1,5 @@
-# %%
-# Import necessary packages and set up environment
+# ========== NeXtCortex project ==========
+
 using DrWatson
 findproject(@__DIR__) |> quickactivate
 
@@ -12,32 +12,23 @@ using Logging
 using Plots
 using Statistics
 using Random
-
 import SpikingNeuralNetworks: @update
 
-# Set global logger to display messages in console
+# Logger
 global_logger(ConsoleLogger())
-
-# Load units for physical quantities
 SNN.@load_units
 
-
-
-# %% [markdown]
-# ## Network Configuration
-#
-# Define the network parameters including neuron populations, synaptic properties,
-# and connection probabilities.
-
-# %%
-# Define network configuration parameters
 import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
 
+# --------------------------------------------------------------
+# Network configuration
+# --------------------------------------------------------------
 
 TC3inhib_network = (
     # Number of neurons in each population
     Npop=(ThalExc=200, CortExc=4000,
-        CortPvInh=800, CortSstInh=100, CortVipInh=100), seed=1234,
+        CortPvInh=800, CortSstInh=100, CortVipInh=100),
+    seed=1234,
 
     # Parameters for cortical excitatory neurons
     exc=IFParameter(
@@ -89,7 +80,7 @@ TC3inhib_network = (
         E_i=-80mV,          # Inhibitory reversal potential
         E_e=0mV             # Excitatory reversal potential
     ),
-    synapse_PV=SingleExpSynapse(τi=3ms, τe=5ms, E_i=-80mV, E_e=0mV),
+    synapse_PV=SingleExpSynapse(τi=5ms, τe=5ms, E_i=-80mV, E_e=0mV),
     synapse_SST=SingleExpSynapse(τi=12ms, τe=5ms, E_i=-80mV, E_e=0mV),
     synapse_VIP=SingleExpSynapse(τi=7ms, τe=5ms, E_i=-80mV, E_e=0mV),
 
@@ -100,9 +91,9 @@ TC3inhib_network = (
         ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc = (p=0.05, μ=2nS, rule=:Fixed),
-        CortExc_to_CortPv = (p=0.05, μ=2nS, rule=:Fixed),
-        CortExc_to_ThalExc = (p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
+        CortExc_to_CortExc=(p=0.15, μ=2nS, rule=:Fixed),
+        CortExc_to_CortPv=(p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
         CortPv_to_CortExc=(p=0.05, μ=10nS, rule=:Fixed),
         CortPv_to_CortPv=(p=0.05, μ=10nS, rule=:Fixed),
@@ -138,105 +129,111 @@ TC3inhib_network = (
     ),
 )
 
-# %% [markdown]
-# ## Network Simulation
-#
-# Create the network and simulate it for a fixed duration.
 
-# %%
-# Create and simulate the network
+# --------------------------------------------------------------
+# Build and simulate
+# --------------------------------------------------------------
 model = NetworkUtils.build_network(TC3inhib_network)
-SNN.print_model(model)                      # Print model summary
-SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
-SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
+SNN.monitor!(model.pop, [:v], sr=1kHz)
+Random.seed!(TC3inhib_network.seed)
+SNN.sim!(model, duration=3s)
 
-# %%
-# Measure the onset of epileptic activity (STTC)
-myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
-sttc_value = mean(SNN.STTC(myspikes, 50ms))
+# --------------------------------------------------------------
+# Extract spike times
+# --------------------------------------------------------------
+pops = (:TE, :CE, :PV, :SST, :VIP)
+spk = Dict(p => SNN.spiketimes(getfield(model.pop, p)) for p in pops)
 
+# --------------------------------------------------------------
+# Raster plot
+# --------------------------------------------------------------
+plt_raster = SNN.raster(model.pop, every=1, title="Raster plot of the balanced network")
+savefig(plt_raster, "raster_full.png")
 
+# --------------------------------------------------------------
+# Firing rate helper
+# --------------------------------------------------------------
+function firing_rate(spiketimes, dt, T)
+    nb = Int(ceil(T/dt))
+    edges = collect(0:dt:nb*dt)
+    counts = zeros(nb)
+    for s in spiketimes
+        counts .+= histcounts(s, edges)
+    end
+    rate = counts ./ (length(spiketimes)*dt)
+    t = edges[1:end-1] .+ dt/2
+    return t, rate
+end
 
-# %% [markdown]
-# ## Visualization
-#
-# Visualize the spiking activity of the network.
+# --------------------------------------------------------------
+# Firing rate plot
+# --------------------------------------------------------------
+frplt = plot(title="Population firing rates", xlabel="Time (s)", ylabel="Hz")
+for p in pops
+    t, r = firing_rate(spk[p], 0.01, 3.0)
+    plot!(frplt, t, r, label=string(p))
+end
+savefig(frplt, "firing_rates.png")
 
-# %%
-# Plot Membrane potential dynamics of  neuron subtypes in one figure
-# %%
-p1 = SNN.vecplot(model.pop.PV, :v, neurons=1, title="PV", c=:darkorange)
-p2 = SNN.vecplot(model.pop.SST, :v, neurons=1, title="SST", c=:darkgreen)
-p3 = SNN.vecplot(model.pop.VIP, :v, neurons=1, title="VIP", c=:purple)
-p4 = SNN.vecplot(model.pop.CE, :v, neurons=1, title="Exc", c=:darkcyan)
-p5 = SNN.vecplot(model.pop.TE, :v, neurons=1, title="ThalExc", c=:blue)
+# --------------------------------------------------------------
+# Membrane potential traces (mean + std)
+# --------------------------------------------------------------
+function pop_vm(model, popsym::Symbol)
+    pop = getfield(model.pop, popsym)
+    v = pop.v
+    if size(v,1) < size(v,2)
+        v = v'
+    end
+    t = collect(0:1/model.monitor_sr:(size(v,1)-1)/model.monitor_sr)
+    mv = mean(v, dims=2)[:]
+    sv = std(v, dims=2)[:]
+    return t, mv, sv
+end
 
-plot(p1, p2, p3, p4, p5, layout=(5, 1), link=:x, size=(2000, 1800),
-    xlabel="Time (s)", ylabel="Membrane potential (mV)")
-# %%
-# Plot Firing rates of neuron subtypes in one figure
-time_axis = 0:20:3000
-# === CE ===
-rates_CE = SNN.firing_rate(model.pop.CE, time_axis, sampling=20ms, τ=25ms)
-rates_CE_mat = rates_CE[1]
-t = collect(rates_CE[2]) ./ 1000   # 秒
-pop_CE = vec(mean(rates_CE_mat, dims=1))
-# === PV ===
-rates_PV = SNN.firing_rate(model.pop.PV, time_axis, sampling=20ms, τ=25ms)
-rates_PV_mat = rates_PV[1]
-pop_PV = vec(mean(rates_PV_mat, dims=1))
+vmplt = plot(title="Vm dynamics", xlabel="Time (s)", ylabel="mV")
+for p in pops
+    try
+        t, mv, sv = pop_vm(model, p)
+        plot!(vmplt, t, mv, label=string(p))
+        band!(vmplt, t, mv.-sv, mv.+sv, alpha=0.1)
+    catch
+    end
+end
+savefig(vmplt, "vm_dynamics.png")
 
-# === SST ===
-rates_SST = SNN.firing_rate(model.pop.SST, time_axis, sampling=20ms, τ=25ms)
-rates_SST_mat = rates_SST[1]
-pop_SST = vec(mean(rates_SST_mat, dims=1))
+# --------------------------------------------------------------
+# STTC computation
+# --------------------------------------------------------------
+function pop_sttc(spikes; npairs=200, dt=0.05)
+    ids = findall(s -> !isempty(s), spikes)
+    if length(ids) < 2
+        return NaN
+    end
+    pairs = []
+    while length(pairs) < npairs
+        i, j = rand(ids), rand(ids)
+        i == j && continue
+        push!(pairs, (min(i,j), max(i,j)))
+    end
+    vals = Float64[]
+    for (i,j) in pairs
+        try
+            push!(vals, SNN.STTC([spikes[i], spikes[j]], dt))
+        catch
+        end
+    end
+    return mean(vals)
+end
 
-# === VIP ===
-rates_VIP = SNN.firing_rate(model.pop.VIP, time_axis, sampling=20ms, τ=25ms)
-rates_VIP_mat = rates_VIP[1]
-pop_VIP = vec(mean(rates_VIP_mat, dims=1))
+sttc = Dict(p => pop_sttc(spk[p]) for p in pops)
+allspk = vcat([spk[p] for p in pops]...)
+global_sttc = pop_sttc(allspk, npairs=500)
 
-# === TE (Thalamic Exc) ===
-rates_TE = SNN.firing_rate(model.pop.TE, time_axis, sampling=20ms, τ=25ms)
-rates_TE_mat = rates_TE[1]
-pop_TE = vec(mean(rates_TE_mat, dims=1))
-# Plot all populations together
+println("STTC per population:")
+println(sttc)
+println("Global STTC = ", global_sttc)
 
-plot(t, pop_CE, lw=2, label="CortExc (CE)")
-plot!(t, pop_PV, lw=2, label="CortPV (PV)")
-plot!(t, pop_SST, lw=2, label="CortSST (SST)")
-plot!(t, pop_VIP, lw=2, label="CortVIP (VIP)")
-plot!(t, pop_TE, lw=2, label="ThalExc (TE)")
-
-xlabel!("Time (s)")
-ylabel!("Population firing rate (Hz)")
-title!("Population firing rates of all subtypes")
-
-# Plot raster plot of network activity
-SNN.raster(model.pop, every=1,
-    title="Raster plot of the balanced network")
-
-# %%
-
-# Plot vector field plot of network activity
-SNN.vecplot(model.pop.CE, :v, neurons=13,
-    title="Vecplot of the balanced network",
-    xlabel="Time (s)",
-    ylabel="Potential (mV)",
-    lw=2,
-    c=:darkcyan)
-
-# %%
-
-# Function to change the sample resolution of the plots
-pop_spiketimes = SNN.spiketimes(model.pop.CE)
-subsample = pop_spiketimes[1:10:end]
-SNN.STTC(subsample, 10ms)
-
-#%%
-
-# %% [markdown]
-# VIP→SST Modulation Experiment
+# ================= VIP→SST Modulation Experiment =================
 
 base = TC3inhib_network.connections
 
@@ -276,15 +273,6 @@ heatmap(
     title="VIP→SST modulation effect on synchrony"
 )
 
-# %% [markdown]
-# Cortical Feedback to Thalamus Sweep
-
-μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]
-p_scales = [0.05, 0.1, 0.2, 0.3]
-
-# Network with feedback
-#results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network; μ_scales=μ_scales, p_scales=p_scales)
-
 
 # Measure the onset of epileptic activity (STTC)
 myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
@@ -297,6 +285,7 @@ sttc_value = mean(SNN.STTC(myspikes, 50ms))
 tvals, result = NetworkUtils.sweep_sttc_time(TC3inhib_network; μ_scales=μ_scales)
 
 # build matrix: rows=time, columns=scaling
+
 H = hcat([result[(μ=μ, p=1.0)] for μ in μ_scales]...)
 
 heatmap(
@@ -327,3 +316,4 @@ SNN.vecplot(model.pop.CE, :v, neurons=13,
     c=:darkcyan)
 
 # %%
+# test 

@@ -7,9 +7,9 @@ using Statistics
 
 SNN.@load_units
 
-import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
+import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
 
-export scaled_connection, build_network, run_condition, sweep_parameters, sweep_TC_feedback, sweep_sttc_time, sttc_over_time
+export scaled_connection, build_network, run_condition, sweep_parameters, sweep_TC_feedback, sweep_sttc_time, sttc_over_time, firing_rate
 
 # -------------------------------------------------------------------
 # Scale a connection tuple (probability & weight)
@@ -104,46 +104,20 @@ function run_condition(config; target, μ_scale=1.0, p_scale=1.0)
     return mean(STTC(spikes, 50ms))
 end
 
-
-# -------------------------------------------------------------------
-# Average firing rate helper
-# -------------------------------------------------------------------
-function average_firing_rate(model; pops=[:CE])
-    spks_all = []
-    for p in pops
-        spks = SNN.spiketimes(getfield(model.pop, p))  # sélectionne la population
-        append!(spks_all, filter(!isempty, spks))
+# --------------------------------------------------------------
+# Firing rate helper
+# --------------------------------------------------------------
+function firing_rate(spiketimes, dt, T)
+    nb = Int(ceil(T/dt))
+    edges = collect(0:dt:nb*dt)
+    counts = zeros(nb)
+    for s in spiketimes
+        counts .+= histcounts(s, edges)
     end
-    return mean(firing_rate(spks_all))
+    rate = counts ./ (length(spiketimes)*dt)
+    t = edges[1:end-1] .+ dt/2
+    return t, rate
 end
-
-
-# -------------------------------------------------------------------
-# Parameter sweep over μ and p for CortExc -> ThalExc feedback
-# -------------------------------------------------------------------
-function sweep_TC_feedback(config; μ_scales, p_scales)
-    results = Dict{NamedTuple, Dict}()
-
-    for μ in μ_scales, p in p_scales
-        key = (μ=μ, p=p)
-        sttc = run_condition(config;
-            target=:CortExc_to_ThalExc,
-            μ_scale=μ,
-            p_scale=p
-        )
-
-        # Build network to measure firing rate separately
-        mod = build_network(config)
-        sim!(mod, 3s)
-        rate = average_firing_rate(mod)
-
-        results[key] = Dict(:STTC => sttc, :firing_rate => rate)
-    end
-
-    return results
-end
-
-
 
 # -------------------------------------------------------------------
 # Compute STTC over time
