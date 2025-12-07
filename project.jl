@@ -100,13 +100,13 @@ TC3inhib_network = (
         ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc=(p=0.15, μ=2nS, rule=:Fixed),
-        CortExc_to_CortPv=(p=0.05, μ=2nS, rule=:Fixed),
-        CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
+        CortExc_to_CortExc = (p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortPv = (p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_ThalExc = (p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
         CortPv_to_CortExc=(p=0.05, μ=10nS, rule=:Fixed),
         CortPv_to_CortPv=(p=0.05, μ=10nS, rule=:Fixed),
-        CortPv_to_CortSst=(p=0.05, μ=10nS, rule=:Fixed),        # PV_to_SST connection added
+        CortPv_to_CortSst=(p=0.05, μ=10nS, rule=:Fixed),          # PV_to_SST connection added
         # from CortSst
         CortSst_to_CortExc=(p=0.025, μ=10nS, rule=:Fixed),
         CortSst_to_CortPv=(p=0.025, μ=10nS, rule=:Fixed),
@@ -165,10 +165,10 @@ sttc_value = mean(SNN.STTC(myspikes, 50ms))
 # %%
 # Plot Membrane potential dynamics of  neuron subtypes in one figure
 # %%
-p1 = SNN.vecplot(model.pop.PV, :v, neurons=1, title="PV", c=:darkorange)
-p2 = SNN.vecplot(model.pop.SST, :v, neurons=1, title="SST", c=:darkgreen)
-p3 = SNN.vecplot(model.pop.VIP, :v, neurons=1, title="VIP", c=:purple)
-p4 = SNN.vecplot(model.pop.CE, :v, neurons=1, title="Exc", c=:darkcyan)
+p1 = SNN.vecplot(model.pop.PV, :v, neurons=1, title="CortPv", c=:darkorange)
+p2 = SNN.vecplot(model.pop.SST, :v, neurons=1, title="CortSst", c=:darkgreen)
+p3 = SNN.vecplot(model.pop.VIP, :v, neurons=1, title="CortVip", c=:purple)
+p4 = SNN.vecplot(model.pop.CE, :v, neurons=1, title="CortExc", c=:darkcyan)
 p5 = SNN.vecplot(model.pop.TE, :v, neurons=1, title="ThalExc", c=:blue)
 
 plot(p1, p2, p3, p4, p5, layout=(5, 1), link=:x, size=(2000, 1800),
@@ -200,12 +200,13 @@ pop_VIP = vec(mean(rates_VIP_mat, dims=1))
 rates_TE = SNN.firing_rate(model.pop.TE, time_axis, sampling=20ms, τ=25ms)
 rates_TE_mat = rates_TE[1]
 pop_TE = vec(mean(rates_TE_mat, dims=1))
+
 # Plot all populations together
 
 plot(t, pop_CE, lw=2, label="CortExc (CE)")
-plot!(t, pop_PV, lw=2, label="CortPV (PV)")
-plot!(t, pop_SST, lw=2, label="CortSST (SST)")
-plot!(t, pop_VIP, lw=2, label="CortVIP (VIP)")
+plot!(t, pop_PV, lw=2, label="CortPv (PV)")
+plot!(t, pop_SST, lw=2, label="CortSst (SST)")
+plot!(t, pop_VIP, lw=2, label="CortVip (VIP)")
 plot!(t, pop_TE, lw=2, label="ThalExc (TE)")
 
 xlabel!("Time (s)")

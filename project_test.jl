@@ -14,226 +14,115 @@ using Statistics
 using Random
 import SpikingNeuralNetworks: @update
 
-# Logger
 global_logger(ConsoleLogger())
 SNN.@load_units
 
-import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, firing_rate, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
+import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, SingleExpSynapse, IFParameter, Population, PostSpike, STTC
 
 # --------------------------------------------------------------
-# Network configuration
+# Network configuration (short names only)
 # --------------------------------------------------------------
 
 TC3inhib_network = (
-    # Number of neurons in each population
-    Npop=(ThalExc=200, CortExc=4000,
-        CortPvInh=800, CortSstInh=100, CortVipInh=100),
-    seed=1234,
+    Npop = (TE=200, CE=4000, PV=800, SST=100, VIP=100),
+    seed = 1234,
 
-    # Parameters for cortical excitatory neurons
-    exc=IFParameter(
-        τm=200pF / 10nS,  # Membrane time constant
-        El=-70mV,         # Leak reversal potential
-        Vt=-50.0mV,       # Spike threshold
-        Vr=-70.0f0mV,     # Reset potential
-        R=1 / 10nS,       # Membrane resistance
+    exc = IFParameter(
+        τm=200pF / 10nS,
+        El=-70mV,
+        Vt=-50mV,
+        Vr=-70mV,
+        R=1/10nS,
     ),
 
-    # Parameters for the different populations of inhibitory neurons
-    # PV population parameters (FASTER)
-    inh_PV=IFParameter(
-        τm=100pF / 10nS,      # Membrane time constant: PV faster
-        El=-70mV,             # Leak reversal potential
-        Vt=-53mV,             # Spike threshold
-        Vr=-70mV,             # Reset potential
-        R=1 / 10nS,           # Membrane resistance
+    inh_PV  = IFParameter(τm=100pF/10nS, El=-70mV, Vt=-53mV, Vr=-70mV, R=1/10nS),
+    inh_SST = IFParameter(τm=200pF/10nS, El=-70mV, Vt=-53mV, Vr=-70mV, R=1/10nS),
+    inh_VIP = IFParameter(τm=150pF/10nS, El=-70mV, Vt=-53mV, Vr=-70mV, R=1/10nS),
+
+    spike     = PostSpike(τabs=5ms),
+    spike_PV  = PostSpike(τabs=2ms),
+    spike_SST = PostSpike(τabs=10ms),
+    spike_VIP = PostSpike(τabs=5ms),
+
+    synapse     = SingleExpSynapse(τi=5ms, τe=5ms, E_i=-80mV, E_e=0mV),
+    synapse_PV  = SingleExpSynapse(τi=5ms, τe=5ms, E_i=-80mV, E_e=0mV),
+    synapse_SST = SingleExpSynapse(τi=12ms, τe=5ms, E_i=-80mV, E_e=0mV),
+    synapse_VIP = SingleExpSynapse(τi=7ms, τe=5ms, E_i=-80mV, E_e=0mV),
+
+    connections = (
+        TE_to_CE = (p=0.05, μ=4nS, rule=:Fixed),
+        TE_to_PV = (p=0.05, μ=4nS, rule=:Fixed),
+
+        CE_to_CE = (p=0.15, μ=2nS, rule=:Fixed),
+        CE_to_PV = (p=0.05, μ=2nS, rule=:Fixed),
+        CE_to_TE = (p=0.05, μ=2nS, rule=:Fixed),
+
+        PV_to_CE  = (p=0.05, μ=10nS, rule=:Fixed),
+        PV_to_PV  = (p=0.05, μ=10nS, rule=:Fixed),
+        PV_to_SST = (p=0.05, μ=10nS, rule=:Fixed),
+
+        SST_to_CE  = (p=0.025, μ=10nS, rule=:Fixed),
+        SST_to_PV  = (p=0.025, μ=10nS, rule=:Fixed),
+        SST_to_VIP = (p=0.025, μ=10nS, rule=:Fixed),
+
+        VIP_to_SST = (p=0.3, μ=10nS, rule=:Fixed),
     ),
 
-    # SST population parameters (SLOWER)
-    inh_SST=IFParameter(
-        τm=200pF / 10nS,      # Membrane time constant: SST slower
-        El=-70mV,             # Leak reversal potential
-        Vt=-53mV,             # Spike threshold
-        Vr=-70mV,             # Reset potential
-        R=1 / 10nS,           # Membrane resistance
-    ),
-
-    # VIP population parameters (MEDIUM)
-    inh_VIP=IFParameter(
-        τm=150pF / 10nS,      # Membrane time constant: VIP medium
-        El=-70mV,             # Leak reversal potential
-        Vt=-53mV,             # Spike threshold
-        Vr=-70mV,             # Reset potential
-        R=1 / 10nS,           # Membrane resistance
-    ),
-
-    # Spiking threshold properties: absolute refractory period
-    spike=PostSpike(τabs=5ms),
-    spike_PV=PostSpike(τabs=2ms),
-    spike_SST=PostSpike(τabs=10ms),
-    spike_VIP=PostSpike(τabs=5ms),
-
-    # Synaptic properties
-    synapse=SingleExpSynapse(
-        τi=5ms,             # Inhibitory synaptic time constant
-        τe=5ms,             # Excitatory synaptic time constant
-        E_i=-80mV,          # Inhibitory reversal potential
-        E_e=0mV             # Excitatory reversal potential
-    ),
-    synapse_PV=SingleExpSynapse(τi=5ms, τe=5ms, E_i=-80mV, E_e=0mV),
-    synapse_SST=SingleExpSynapse(τi=12ms, τe=5ms, E_i=-80mV, E_e=0mV),
-    synapse_VIP=SingleExpSynapse(τi=7ms, τe=5ms, E_i=-80mV, E_e=0mV),
-
-
-    # Connection probabilities and synaptic weights
-    connections=(
-        # from ThalExc
-        ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
-        ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
-        # from CortExc
-        CortExc_to_CortExc=(p=0.15, μ=2nS, rule=:Fixed),
-        CortExc_to_CortPv=(p=0.05, μ=2nS, rule=:Fixed),
-        CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
-        # from CortPv
-        CortPv_to_CortExc=(p=0.05, μ=10nS, rule=:Fixed),
-        CortPv_to_CortPv=(p=0.05, μ=10nS, rule=:Fixed),
-        CortPv_to_CortSst=(p=0.05, μ=10nS, rule=:Fixed),        # PV_to_SST connection added
-        # from CortSst
-        CortSst_to_CortExc=(p=0.025, μ=10nS, rule=:Fixed),
-        CortSst_to_CortPv=(p=0.025, μ=10nS, rule=:Fixed),
-        CortSst_to_CortVip=(p=0.025, μ=10nS, rule=:Fixed),
-        # from CortVip
-        CortVip_to_CortSst=(p=0.3, μ=10nS, rule=:Fixed),
-    ),
-
-    # Parameters for external Poisson input
-    afferents_to_ThalExc=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000),           # Poisson input layer
-        conn=(p=0.05, μ=4.0nS, rule=:Fixed),              # Connection probability and weight
-    ),
-    afferents_to_CortExc=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000),           # Poisson input layer
-        conn=(p=0.02, μ=4.0nS, rule=:Fixed),              # Connection probability and weight
-    ),
-    afferents_to_CortPv=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000),           # Poisson input layer
-        conn=(p=0.02, μ=4.0nS, rule=:Fixed),              # Connection probability and weight
-    ),
-    afferents_to_CortSst=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000),           # Poisson input layer
-        conn=(p=0.15, μ=2.0nS, rule=:Fixed),              # Connection probability and weight
-    ),
-    afferents_to_CortVip=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000),           # Poisson input layer
-        conn=(p=0.10, μ=2.0nS, rule=:Fixed),              # Connection probability and weight
-    ),
+    afferents_to_TE  = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.05, μ=4nS, rule=:Fixed)),
+    afferents_to_CE  = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.02, μ=4nS, rule=:Fixed)),
+    afferents_to_PV  = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.02, μ=4nS, rule=:Fixed)),
+    afferents_to_SST = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.15, μ=2nS, rule=:Fixed)),
+    afferents_to_VIP = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.10, μ=2nS, rule=:Fixed)),
 )
-
 
 # --------------------------------------------------------------
 # Build and simulate
 # --------------------------------------------------------------
 model = NetworkUtils.build_network(TC3inhib_network)
-SNN.monitor!(model.pop, [:v], sr=1kHz)
-Random.seed!(TC3inhib_network.seed)
-SNN.sim!(model, duration=3s)
+monitor!(model.pop, [:v], sr=1kHz)
 
-# --------------------------------------------------------------
-# Extract spike times
-# --------------------------------------------------------------
-pops = (:TE, :CE, :PV, :SST, :VIP)
-spk = Dict(p => SNN.spiketimes(getfield(model.pop, p)) for p in pops)
+Random.seed!(TC3inhib_network.seed)
+sim!(model, 3s)
 
 # --------------------------------------------------------------
 # Raster plot
 # --------------------------------------------------------------
-plt_raster = SNN.raster(model.pop, every=1, title="Raster plot of the balanced network")
-savefig(plt_raster, "raster_full.png")
+SNN.raster(model.pop, every=1,
+           title="Raster plot (TE, CE, PV, SST, VIP)")
+savefig("raster_full.png")
 
 # --------------------------------------------------------------
-# Firing rate helper
+# Firing rate dynamics
 # --------------------------------------------------------------
-function firing_rate(spiketimes, dt, T)
-    nb = Int(ceil(T/dt))
-    edges = collect(0:dt:nb*dt)
-    counts = zeros(nb)
-    for s in spiketimes
-        counts .+= histcounts(s, edges)
-    end
-    rate = counts ./ (length(spiketimes)*dt)
-    t = edges[1:end-1] .+ dt/2
-    return t, rate
-end
-
-# --------------------------------------------------------------
-# Firing rate plot
-# --------------------------------------------------------------
-frplt = plot(title="Population firing rates", xlabel="Time (s)", ylabel="Hz")
-for p in pops
-    t, r = firing_rate(spk[p], 0.01, 3.0)
-    plot!(frplt, t, r, label=string(p))
-end
+t, rates, frplt = NetworkUtils.plot_firing_rates(model)
 savefig(frplt, "firing_rates.png")
 
-# --------------------------------------------------------------
-# Membrane potential traces (mean + std)
-# --------------------------------------------------------------
-function pop_vm(model, popsym::Symbol)
-    pop = getfield(model.pop, popsym)
-    v = pop.v
-    if size(v,1) < size(v,2)
-        v = v'
-    end
-    t = collect(0:1/model.monitor_sr:(size(v,1)-1)/model.monitor_sr)
-    mv = mean(v, dims=2)[:]
-    sv = std(v, dims=2)[:]
-    return t, mv, sv
-end
-
-vmplt = plot(title="Vm dynamics", xlabel="Time (s)", ylabel="mV")
-for p in pops
-    try
-        t, mv, sv = pop_vm(model, p)
-        plot!(vmplt, t, mv, label=string(p))
-        band!(vmplt, t, mv.-sv, mv.+sv, alpha=0.1)
-    catch
-    end
-end
-savefig(vmplt, "vm_dynamics.png")
 
 # --------------------------------------------------------------
-# STTC computation
+# Membrane potential dynamics 
 # --------------------------------------------------------------
-function pop_sttc(spikes; npairs=200, dt=0.05)
-    ids = findall(s -> !isempty(s), spikes)
-    if length(ids) < 2
-        return NaN
-    end
-    pairs = []
-    while length(pairs) < npairs
-        i, j = rand(ids), rand(ids)
-        i == j && continue
-        push!(pairs, (min(i,j), max(i,j)))
-    end
-    vals = Float64[]
-    for (i,j) in pairs
-        try
-            push!(vals, SNN.STTC([spikes[i], spikes[j]], dt))
-        catch
-        end
-    end
-    return mean(vals)
-end
+plt_v = NetworkUtils.plot_membrane_potentials(model)
+savefig(plt_v, "membrane_potentials_dynamic.png")
 
-sttc = Dict(p => pop_sttc(spk[p]) for p in pops)
-allspk = vcat([spk[p] for p in pops]...)
-global_sttc = pop_sttc(allspk, npairs=500)
+# --------------------------------------------------------------
+# STTC
+# --------------------------------------------------------------
+myspikes = SNN.spiketimes(model.pop)    
+sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
+println("STTC = ", sttc_value)
 
-println("STTC per population:")
-println(sttc)
-println("Global STTC = ", global_sttc)
 
-# ================= VIP→SST Modulation Experiment =================
+# %%
+
+# Function to change the sample resolution of the plots
+pop_spiketimes = SNN.spiketimes(model.pop.CE)
+subsample = pop_spiketimes[1:10:end]
+SNN.STTC(subsample, 10ms)
+
+#%%
+
+# %% [markdown]
+# VIP→SST Modulation Experiment
 
 base = TC3inhib_network.connections
 
@@ -272,6 +161,15 @@ heatmap(
     ylabel="μ scale",
     title="VIP→SST modulation effect on synchrony"
 )
+
+# %% [markdown]
+# Cortical Feedback to Thalamus Sweep
+
+μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]
+p_scales = [0.05, 0.1, 0.2, 0.3]
+
+# Network with feedback
+#results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network; μ_scales=μ_scales, p_scales=p_scales)
 
 
 # Measure the onset of epileptic activity (STTC)
