@@ -102,7 +102,7 @@ TC3inhib_network = (
         ThalExc_to_CortExc = (p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv = (p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc = (p=0.15, μ=2nS, rule=:Fixed),
+        CortExc_to_CortExc = (p=0.05, μ=2nS, rule=:Fixed),
         CortExc_to_CortPv = (p=0.05, μ=2nS, rule=:Fixed),
         CortExc_to_ThalExc = (p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
