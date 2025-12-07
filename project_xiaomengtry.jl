@@ -103,7 +103,7 @@ TC3inhib_network = (
     spike_SST=PostSpike(τabs=10ms),
 
     # Synaptic properties
-    synapse=SingleExpSynapse(
+    synapse_ce=SingleExpSynapse(
         τi=5ms,             # Inhibitory synaptic time constant
         τe=5ms,             # Excitatory synaptic time constant
         E_i=-80mV,          # Inhibitory reversal potential
@@ -120,20 +120,20 @@ TC3inhib_network = (
     # Connection probabilities and synaptic weights
     connections=(
         # ThalExc-> Cortex
-        ThalExc_to_CortExc=(p=0.10, μ=2nS, rule=:Fixed),
-        ThalExc_to_CortPv=(p=0.15, μ=4nS, rule=:Fixed),
+        ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
+        ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
         # from Cortex recurrent
-        CortExc_to_CortExc=(p=0.15, μ=1.25nS, rule=:Fixed),
-        CortExc_to_CortPv=(p=0.25, μ=3.75nS, rule=:Fixed),
-        CortExc_to_CortSst=(p=0.20, μ=2.5nS, rule=:Fixed),
-        # CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
+        CortExc_to_CortExc=(p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortPv=(p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortSst=(p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_ThalExc=(p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
-        CortPv_to_CortExc=(p=0.20, μ=6nS, rule=:Fixed),
-        CortPv_to_CortPv=(p=0.20, μ=6nS, rule=:Fixed),
+        CortPv_to_CortExc=(p=0.05, μ=10nS, rule=:Fixed),
+        CortPv_to_CortPv=(p=0.05, μ=10nS, rule=:Fixed),
         #CortPv_to_CortSst=(p=0.05, μ=10nS, rule=:Fixed),        # PV_to_SST connection added
         # from CortSst
-        CortSst_to_CortExc=(p=0.20, μ=5nS, rule=:Fixed),
-        CortSst_to_CortPv=(p=0.20, μ=5nS, rule=:Fixed),
+        CortSst_to_CortExc=(p=0.025, μ=5nS, rule=:Fixed),
+        CortSst_to_CortPv=(p=0.025, μ=5nS, rule=:Fixed),
         # CortSst_to_CortVip=(p=0.025, μ=10nS, rule=:Fixed),
         # from CortVip
         # CortVip_to_CortSst=(p=0.3, μ=10nS, rule=:Fixed),
@@ -156,30 +156,81 @@ TC3inhib_network = (
         layer=PoissonLayer(rate=1.5Hz, N=1000), # Poisson input layer
         conn=(p=0.15, μ=2.0nS, rule=:Fixed), # Connection probability and weight
     ),
-    afferents_to_CortVip=(
-        layer=PoissonLayer(rate=1.5Hz, N=1000), # Poisson input layer
-        conn=(p=0.10, μ=2.0nS, rule=:Fixed), # Connection probability and weight
-    ),
+    #afferents_to_CortVip=(
+    #layer=PoissonLayer(rate=1.5Hz, N=1000), # Poisson input layer
+    #conn=(p=0.10, μ=2.0nS, rule=:Fixed), # Connection probability and weight
+    #),
 )
 
 # %% [markdown]
 # ## Network Simulation
-#
-# Create the network and simulate it for a fixed duration.
-
 # %%
 # Create and simulate the network
-model = NetworkUtils.build_network(TC3inhib_network)
-SNN.print_model(model)                      # Print model summary
-SNN.monitor!(model.pop, [:v], sr=1kHz)      # Monitor membrane potentials
-SNN.sim!(model, duration=3s)                # Simulate for 3 seconds
+# Define a function to create the network based on the configuration parameters.
+
+# %%
+# Function to create the network
+function network(config)
+    @unpack afferents_to_ThalExc, afferents_to_CortExc, afferents_to_CortPv, afferents_to_CortSst, connections, Npop, spike, spike_PV, exc, thal, inh_PV, inh_SST = config
+    @unpack synapse_ce, synapse_thal, synapse_PV, synapse_SST = config
+
+    # Create neuron populations
+    TE = Population(thal; synapse=synapse_thal, spike, N=Npop.ThalExc, name="ThalExc")
+    CE = Population(exc; synapse=synapse_ce, spike, N=Npop.CortExc, name="CortExc")
+    PV = Population(inh_PV; synapse=synapse_PV, spike, N=Npop.CortPvInh, name="CortPvInh")
+    SST = Population(inh_SST; synapse=synapse_SST, spike, N=Npop.CortSstInh, name="CortSstInh")
+    # VIP = Population(inh; synapse, spike, N=Npop.CortVipInh, name="CortVipInh")
+
+    # Create external Poisson input
+    @unpack layer = afferents_to_ThalExc
+    afferentTE = Stimulus(layer, TE, :glu, conn=afferents_to_ThalExc.conn, name="bgTE")  # Excitatory input
+    @unpack layer = afferents_to_CortExc
+    afferentRE = Stimulus(layer, CE, :glu, conn=afferents_to_CortExc.conn, name="bgRE")  # Excitatory input
+    @unpack layer = afferents_to_CortPv
+    afferentPV = Stimulus(layer, PV, :glu, conn=afferents_to_CortPv.conn, name="bgPV")  # Excitatory input
+    @unpack layer = afferents_to_CortSst
+    afferentSST = Stimulus(layer, SST, :glu, conn=afferents_to_CortSst.conn, name="bgSST")  # Excitatory input
+    #@unpack layer = afferents_to_CortVip
+    #afferentVIP = Stimulus(layer, VIP, :glu, conn=afferents_to_CortSst.conn, name="bgSST")  # Excitatory input
+
+    # Create recurrent connections
+    synapses = (
+        TE_to_CE=SpikingSynapse(TE, CE, :glu, conn=connections.ThalExc_to_CortExc),
+        TE_to_PV=SpikingSynapse(TE, PV, :glu, conn=connections.ThalExc_to_CortPv), CE_to_CE=SpikingSynapse(CE, CE, :glu, conn=connections.CortExc_to_CortExc),
+        CE_to_PV=SpikingSynapse(CE, PV, :glu, conn=connections.CortExc_to_CortPv),
+        CE_to_SST=SpikingSynapse(CE, SST, :glu, conn=connections.CortExc_to_CortSst),
+        CE_to_TE=SpikingSynapse(CE, TE, :glu, conn=connections.CortExc_to_ThalExc), PV_to_CE=SpikingSynapse(PV, CE, :gaba, conn=connections.CortPv_to_CortExc),
+        PV_to_PV=SpikingSynapse(PV, PV, :gaba, conn=connections.CortPv_to_CortPv), SST_to_CE=SpikingSynapse(SST, CE, :gaba, conn=connections.CortSst_to_CortExc),
+        SST_to_PV=SpikingSynapse(SST, PV, :gaba, conn=connections.CortSst_to_CortPv),
+        #SST_to_VIP=SpikingSynapse(SST, VIP, :gaba, conn=connections.CortSst_to_CortVip), VIP_to_SST=SpikingSynapse(VIP, SST, :gaba, conn=connections.CortVip_to_CortSst),
+    )
+
+    # Compose the model
+    model = compose(; TE, CE, PV, SST, #VIP,
+        afferentTE, afferentRE,
+        afferentPV, afferentSST, synapses...,
+        name="thalamo-cortical network")
+
+    # Set up monitoring
+    monitor!(model.pop, [:fire])  # Monitor spikes
+    monitor!(model.stim, [:fire])  # Monitor input spikes
+
+    return model
+end
+
+# %% [markdown]
+# ## Network Simulation
+model = network(TC3inhib_network)
+SNN.print_model(model)  # Print model summary
+SNN.monitor!(model.pop, [:v])
+SNN.sim!(model, duration=3s)               # Simulate for 3 seconds
 
 # %%
 # Measure the onset of epileptic activity (STTC)
 myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
 sttc_value = mean(SNN.STTC(myspikes, 50ms))
 
-
+# Simulate for 5 seconds
 
 # %% [markdown]
 # ## Visualization
@@ -187,15 +238,47 @@ sttc_value = mean(SNN.STTC(myspikes, 50ms))
 # Visualize the spiking activity of the network.
 
 # %%
+# Plot raster plot of network activity
+SNN.raster(model.pop, every=1,
+    title="Raster plot of the balanced network",
+    yrotation=0,
+)
+
+# %%
+SNN.vecplot(model.pop.CE, :v, neurons=13,
+    xlabel="Time (s)",
+    ylabel="Potential (mV)",
+    lw=2,
+    c=:darkblue)
+# %% [markdown]
+# ## Visualization
+#
+# Visualize the spiking activity of the network.
+
+# %%
+# Plot raster plot of the new network activity
+SNN.raster(model.pop, every=1,
+    title="Raster plot of the network for p=0.025, μ=10nS")    # Change the parameters accordingly
+
+# %%
+
+# Plot vector field plot of the new network activity
+SNN.vecplot(model.pop.CE, :v, neurons=13,
+    title="Vecplot of the network for p=0.025, μ=10nS",        # Change the parameters accordingly
+    xlabel="Time (s)",
+    ylabel="Potential (mV)",
+    lw=2,
+    c=:darkcyan)
+
+# %%
 # Plot Membrane potential dynamics of  neuron subtypes in one figure
 # %%
 p1 = SNN.vecplot(model.pop.PV, :v, neurons=1, title="PV", c=:darkorange)
 p2 = SNN.vecplot(model.pop.SST, :v, neurons=1, title="SST", c=:darkgreen)
-p3 = SNN.vecplot(model.pop.VIP, :v, neurons=1, title="VIP", c=:purple)
-p4 = SNN.vecplot(model.pop.CE, :v, neurons=1, title="Exc", c=:darkcyan)
-p5 = SNN.vecplot(model.pop.TE, :v, neurons=1, title="ThalExc", c=:blue)
+p3 = SNN.vecplot(model.pop.CE, :v, neurons=1, title="Exc", c=:darkcyan)
+p4 = SNN.vecplot(model.pop.TE, :v, neurons=1, title="ThalExc", c=:blue)
 
-plot(p1, p2, p3, p4, p5, layout=(5, 1), link=:x, size=(2000, 1800),
+plot(p1, p2, p3, p4, layout=(4, 1), link=:x, size=(2000, 1800),
     xlabel="Time (s)", ylabel="Membrane potential (mV)")
 # %%
 # Plot Firing rates of neuron subtypes in one figure
@@ -214,12 +297,6 @@ pop_PV = vec(mean(rates_PV_mat, dims=1))
 rates_SST = SNN.firing_rate(model.pop.SST, time_axis, sampling=20ms, τ=25ms)
 rates_SST_mat = rates_SST[1]
 pop_SST = vec(mean(rates_SST_mat, dims=1))
-
-# === VIP ===
-rates_VIP = SNN.firing_rate(model.pop.VIP, time_axis, sampling=20ms, τ=25ms)
-rates_VIP_mat = rates_VIP[1]
-pop_VIP = vec(mean(rates_VIP_mat, dims=1))
-
 # === TE (Thalamic Exc) ===
 rates_TE = SNN.firing_rate(model.pop.TE, time_axis, sampling=20ms, τ=25ms)
 rates_TE_mat = rates_TE[1]
@@ -229,29 +306,12 @@ pop_TE = vec(mean(rates_TE_mat, dims=1))
 plot(t, pop_CE, lw=2, label="CortExc (CE)")
 plot!(t, pop_PV, lw=2, label="CortPV (PV)")
 plot!(t, pop_SST, lw=2, label="CortSST (SST)")
-plot!(t, pop_VIP, lw=2, label="CortVIP (VIP)")
 plot!(t, pop_TE, lw=2, label="ThalExc (TE)")
 
 xlabel!("Time (s)")
 ylabel!("Population firing rate (Hz)")
 title!("Population firing rates of all subtypes")
 
-# Plot raster plot of network activity
-SNN.raster(model.pop, every=1,
-    title="Raster plot of the balanced network",
-    xlabel="Time (s)",
-    yrotation=0
-)
-
-# %%
-
-# Plot vector field plot of network activity
-SNN.vecplot(model.pop.CE, :v, neurons=13,
-    title="Vecplot of the balanced network",
-    xlabel="Time (s)",
-    ylabel="Potential (mV)",
-    lw=2,
-    c=:darkcyan)
 
 # %%
 
@@ -262,95 +322,5 @@ SNN.STTC(subsample, 10ms)
 
 #%%
 
-# %% [markdown]
-# VIP→SST Modulation Experiment
-
-base = TC3inhib_network.connections
-
-config_test = @update TC3inhib_network begin
-    connections = merge(base, (
-        VIP_to_SST=NetworkUtils.scaled_connection(base.CortVip_to_CortSst; μ_scale=1.5, p_scale=1.0),
-        PV_to_SST=NetworkUtils.scaled_connection(base.CortPv_to_CortSst; μ_scale=2.0, p_scale=1.0),
-        PV_to_CE=NetworkUtils.scaled_connection(base.CortPv_to_CortExc; μ_scale=1.5, p_scale=1.0),
-        SST_to_CE=NetworkUtils.scaled_connection(base.CortSst_to_CortExc; μ_scale=0.5, p_scale=1.0),
-    ))
-end
-
-
-μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
-p_scales = [0.1, 0.2, 0.7, 1.0, 1.3]
-
-results = Dict{NamedTuple,Float64}()
-
-for μ in μ_scales, p in p_scales
-    results[(μ, p)] = NetworkUtils.run_condition(
-        TC3inhib_network;
-        target=:CortVip_to_CortSst,
-        μ_scale=μ,
-        p_scale=p
-    )
-end
-
-
-M = [results[(μ=μ, p=p)] for μ in μ_scales, p in p_scales]
-
-heatmap(
-    p_scales,
-    μ_scales,
-    M,
-    xlabel="p scale",
-    ylabel="μ scale",
-    title="VIP→SST modulation effect on synchrony"
-)
-
-# %% [markdown]
-# Cortical Feedback to Thalamus Sweep
-
-μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]
-p_scales = [0.05, 0.1, 0.2, 0.3]
-
-# Network with feedback
-#results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network; μ_scales=μ_scales, p_scales=p_scales)
-
-
-# Measure the onset of epileptic activity (STTC)
-myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
-sttc_value = mean(SNN.STTC(myspikes, 50ms))
-
-#STTC over time
-
-μ_scales = [0.5, 1.0, 1.5, 2.0]
-
-tvals, result = NetworkUtils.sweep_sttc_time(TC3inhib_network; μ_scales=μ_scales)
-
-# build matrix: rows=time, columns=scaling
-H = hcat([result[(μ=μ, p=1.0)] for μ in μ_scales]...)
-
-heatmap(
-    tvals ./ 1s,    # convert to seconds
-    μ_scales,
-    H', #transpose H
-    xlabel="Time (s)",
-    ylabel="μ scaling",
-    title="STTC Over Time for VIP→SST Scaling",
-    colorbar_title="STTC"
-)
-
-# Visualize the spiking activity of the network with the new parameters.
-#
-# %%
-# Plot raster plot of the new network activity
-SNN.raster(model.pop, every=1,
-    title="Raster plot of the network for p=0.025, μ=10nS")    # Change the parameters accordingly
-
-# %%
-
-# Plot vector field plot of the new network activity
-SNN.vecplot(model.pop.CE, :v, neurons=13,
-    title="Vecplot of the network for p=0.025, μ=10nS",        # Change the parameters accordingly
-    xlabel="Time (s)",
-    ylabel="Potential (mV)",
-    lw=2,
-    c=:darkcyan)
 
 # %%
