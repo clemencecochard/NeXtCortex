@@ -42,6 +42,8 @@ function build_network(config)
         CE_to_CE = SpikingSynapse(CE, CE, :glu, conn=connections.CE_to_CE),
         CE_to_PV = SpikingSynapse(CE, PV, :glu, conn=connections.CE_to_PV),
         CE_to_TE = SpikingSynapse(CE, TE, :glu, conn=connections.CE_to_TE),
+        CE_to_SST = SpikingSynapse(CE, SST, :glu, conn=connections.CE_to_SST),
+        CE_to_VIP = SpikingSynapse(CE, VIP, :glu, conn=connections.CE_to_VIP),
 
         PV_to_CE  = SpikingSynapse(PV, CE,  :gaba, conn=connections.PV_to_CE),
         PV_to_PV  = SpikingSynapse(PV, PV,  :gaba, conn=connections.PV_to_PV),
