@@ -60,6 +60,8 @@ TC3inhib_network = (
         CE_to_CE = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_PV = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_TE = (p=0.05, μ=2nS, rule=:Fixed),
+        CE_to_SST = (p=0.05, μ=2nS, rule=:Fixed),
+        CE_to_VIP = (p=0.05, μ=2nS, rule=:Fixed),
 
         PV_to_CE  = (p=0.05, μ=10nS, rule=:Fixed),
         PV_to_PV  = (p=0.05, μ=10nS, rule=:Fixed),
