@@ -98,7 +98,7 @@ function analysis(model; name = "Baseline", figs=true, csv=false, μ=nothing, p=
         plt = SNN.raster(model.pop,
                         every = 1,
                         title = "$name raster plot zoomed")
-        xlims!(plt, 0.5, 1.5) # Zoom x-axis
+        xlims!(plt, 2, 2.5) # Zoom x-axis
         ylims!(plt, 3500, 5200) # Zoom y-axis
         savefig(plt, "$img_path/$name raster_zoom.png")
 

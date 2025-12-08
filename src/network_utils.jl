@@ -104,7 +104,7 @@ function plot_membrane_potentials(model;
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :blue)
     for (i,p) in enumerate(pops)
 
-        vp = SNN.vecplot(model.pop[p], :v, neurons=neurons)
+        vp = SNN.vecplot(model.pop[p], :v, neurons=neurons, add_spikes=true)
 
         for s in vp.series_list
             xs = s[:x]
@@ -112,7 +112,7 @@ function plot_membrane_potentials(model;
             plot!(plt[i], xs, ys, lw=1.5, c=colors[i])
         end
 
-        title!(plt[i], "$name $p")
+        title!(plt[i], "$name membrane potential - $p")
         xlabel!(plt[i], "Time (s)")
         ylabel!(plt[i], "V (mV)")
     end
