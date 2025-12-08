@@ -9,7 +9,7 @@ using Plots
 
 SNN.@load_units
 
-import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, SingleExpSynapse, IFParameter, Population, PostSpike, AdExParameter, STTC
+import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, @update
 
 export build_network, plot_firing_rates, plot_membrane_potentials
 

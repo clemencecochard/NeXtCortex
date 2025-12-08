@@ -19,7 +19,9 @@ import SpikingNeuralNetworks: @update
 global_logger(ConsoleLogger())
 SNN.@load_units
 
-import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, SingleExpSynapse, IFParameter, Population, PostSpike, STTC
+import SpikingNeuralNetworks: PoissonLayer, monitor!, sim!, SingleExpSynapse, IFParameter, PostSpike, STTC
+
+img_path = "plots_and_images"
 
 # --------------------------------------------------------------
 # Network baseline configuration
@@ -86,28 +88,27 @@ Random.seed!(TC3inhib_network.seed)
 sim!(model, 3s)
 
 
-function all_plots(model; name = "Baseline", save_figs=true, csv=false, μ=nothing, p=nothing)
-    # Raster plot
-    SNN.raster(model.pop, every=1,
-            title="$name raster plot (TE, CE, PV, SST, VIP)")
+function analysis(model; name = "Baseline", figs=true, csv=false, μ=nothing, p=nothing)
+    if figs
+        # Raster plot
+        SNN.raster(model.pop, every=1,
+                title="$name raster plot")
+        savefig("$img_path/$name raster_full.png")
 
-    plt = SNN.raster(model.pop,
-                    every = 1,
-                    title = "$name raster plot zoomed")
-    xlims!(plt, 0.5, 1.5) # Zoom x-axis
-    ylims!(plt, 3500, 5200) # Zoom y-axis
+        plt = SNN.raster(model.pop,
+                        every = 1,
+                        title = "$name raster plot zoomed")
+        xlims!(plt, 0.5, 1.5) # Zoom x-axis
+        ylims!(plt, 3500, 5200) # Zoom y-axis
+        savefig(plt, "$img_path/$name raster_zoom.png")
 
-    # Firing rate dynamics
-    frplt = NetworkUtils.plot_firing_rates(model, name = name)
+        # Firing rate dynamics
+        frplt = NetworkUtils.plot_firing_rates(model, name = name)
+        savefig(frplt, "$img_path/$name firing_rates.png")
 
-    # Membrane potential dynamics 
-    plt_v = NetworkUtils.plot_membrane_potentials(model, neurons = 1, name = name)
-
-    if save_figs
-        savefig("plots_and_images/$name raster_full.png")
-        savefig(plt, "plots_and_images/$name raster_zoom.png")
-        savefig(frplt, "plots_and_images/$name firing_rates.png")
-        savefig(plt_v, "plots_and_images/$name membrane_potentials_dynamic.png")
+        # Membrane potential dynamics 
+        plt_v = NetworkUtils.plot_membrane_potentials(model, neurons = 1, name = name)
+        savefig(plt_v, "$img_path/$name membrane_potentials_dynamic.png")
     end
 
     # STTC
@@ -115,25 +116,20 @@ function all_plots(model; name = "Baseline", save_figs=true, csv=false, μ=nothi
     sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
 
     if csv
-        csvfile = "plots_and_images/sttc_results.csv"
-        if !isfile(csvfile) # if the file does not already exist
-            open(csvfile, "w") do io
-                write(io, "mu,p,sttc\n")
-            end
-        end
+        csvfile = "$img_path/$name sttc_results.csv"
 
         open(csvfile, "a") do io
             write(io, string(μ, ",", p, ",", sttc_value, "\n"))
         end
 
     else
-        open("plots_and_images/$name sttc_value.txt", "w") do io
+        open("$img_path/$name sttc_value.txt", "w") do io
             write(io, string(sttc_value))
         end
     end
 end
 
-all_plots(model)
+analysis(model)
 
 # --------------------------------------------------------------
 # Epileptic-like activity (increasing CE_to_CE)
@@ -150,7 +146,7 @@ monitor!(model.pop, [:v], sr=1kHz)
 Random.seed!(TC3inhib_network_modified.seed)
 sim!(model, 3s)
 
-all_plots(model, name = "Epileptic-like state")
+analysis(model, name = "Epileptic-like state")
 
 # --------------------------------------------------------------
 # Thalamic increased connection (increasing TE_to_CE)
@@ -170,11 +166,11 @@ for p in p_values
     Random.seed!(TC3inhib_network_modified.seed)
     sim!(model, 3s)
 
-    all_plots(model, name = "Thalamic increase p=$p")
+    analysis(model, name = "Thalamic increase p=$p")
 end
 
 # --------------------------------------------------------------
-# Slower inhibition test (increasing membrane time constant)
+# Slower inhibition test (increasing PV membrane time constant)
 # --------------------------------------------------------------
 
 TC3inhib_network_modified = (; TC3inhib_network..., 
@@ -186,7 +182,7 @@ monitor!(model.pop, [:v], sr=1kHz)
 Random.seed!(TC3inhib_network_modified.seed)
 sim!(model, 3s)
 
-all_plots(model, name = "Slower inhibition")
+analysis(model, name = "Slower inhibition")
 
 
 # --------------------------------------------------------------
@@ -199,6 +195,12 @@ pops_to_modify = (:VIP_to_SST, :PV_to_CE, :SST_to_CE, :TE_to_CE)
 p_scales = [0.1, 0.2, 0.7, 1.0]
 
 for pop in pops_to_modify
+
+    csvfile = "$img_path/Modulation $pop sttc_results.csv"
+    open(csvfile, "w") do io
+        write(io, "mu,p,sttc\n")
+    end
+
     for μ in μ_scales, p in p_scales
 
         modulation = (; TC3inhib_network.connections[pop]..., μ = μ, p = p)
@@ -211,20 +213,21 @@ for pop in pops_to_modify
         Random.seed!(TC3inhib_network_modified.seed)
         sim!(model, 3s)
 
-        all_plots(model; name = "Modulation $pop p=$p and μ=$μ", save_figs=false, csv = true, μ = μ, p = p)
+        analysis(model; name = "Modulation $pop", figs=false, csv = true, μ = μ, p = p)
     end
 
-    df = CSV.read("plots_and_images/Modulation $pop sttc_results.csv", DataFrame)
-    M = [ df[(df.μ .== μ) .& (df.p .== p), :sttc][1]
+    df = CSV.read("$img_path/Modulation $pop sttc_results.csv", DataFrame)
+    M = [ df[(df.mu .== μ) .& (df.p .== p), :sttc][1]
           for μ in μ_scales, p in p_scales ]
 
     sttc_heatmap = heatmap(
         p_scales, μ_scales, M,
         xlabel="p scale",
         ylabel="μ scale",
-        title="Modulation $pop effect on synchrony"
+        title="Modulation $pop effect on synchrony",
+        color = :viridis,
+        clims = (0, 1) # to get the same color scale every time
     )
 
-    savefig(sttc_heatmap, "plots_and_images/Modulation $pop sttc_heatmap.png")
+    savefig(sttc_heatmap, "$img_path/Modulation $pop sttc_heatmap.png")
 end
-
