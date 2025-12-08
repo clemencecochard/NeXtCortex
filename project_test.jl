@@ -12,6 +12,8 @@ using Logging
 using Plots
 using Statistics
 using Random
+using CSV
+using DataFrames
 import SpikingNeuralNetworks: @update
 
 global_logger(ConsoleLogger())
@@ -20,7 +22,7 @@ SNN.@load_units
 import SpikingNeuralNetworks: IF, PoissonLayer, Stimulus, SpikingSynapse, compose, monitor!, sim!, SingleExpSynapse, IFParameter, Population, PostSpike, STTC
 
 # --------------------------------------------------------------
-# Network configuration (short names only)
+# Network baseline configuration
 # --------------------------------------------------------------
 
 TC3inhib_network = (
@@ -53,7 +55,7 @@ TC3inhib_network = (
         TE_to_CE = (p=0.05, μ=4nS, rule=:Fixed),
         TE_to_PV = (p=0.05, μ=4nS, rule=:Fixed),
 
-        CE_to_CE = (p=0.15, μ=2nS, rule=:Fixed),
+        CE_to_CE = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_PV = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_TE = (p=0.05, μ=2nS, rule=:Fixed),
 
@@ -75,143 +77,154 @@ TC3inhib_network = (
     afferents_to_VIP = (layer=PoissonLayer(rate=1.5Hz, N=1000), conn=(p=0.10, μ=2nS, rule=:Fixed)),
 )
 
-# --------------------------------------------------------------
+
 # Build and simulate
-# --------------------------------------------------------------
 model = NetworkUtils.build_network(TC3inhib_network)
 monitor!(model.pop, [:v], sr=1kHz)
 
 Random.seed!(TC3inhib_network.seed)
 sim!(model, 3s)
 
-# --------------------------------------------------------------
-# Raster plot
-# --------------------------------------------------------------
-SNN.raster(model.pop, every=1,
-           title="Raster plot (TE, CE, PV, SST, VIP)")
-savefig("raster_full.png")
 
-# --------------------------------------------------------------
-# Firing rate dynamics
-# --------------------------------------------------------------
-t, rates, frplt = NetworkUtils.plot_firing_rates(model)
-savefig(frplt, "firing_rates.png")
+function all_plots(model; name = "Baseline", save_figs=true, csv=false, μ=nothing, p=nothing)
+    # Raster plot
+    SNN.raster(model.pop, every=1,
+            title="$name raster plot (TE, CE, PV, SST, VIP)")
 
+    plt = SNN.raster(model.pop,
+                    every = 1,
+                    title = "$name raster plot zoomed")
+    xlims!(plt, 0.5, 1.5) # Zoom x-axis
+    ylims!(plt, 3500, 5200) # Zoom y-axis
 
-# --------------------------------------------------------------
-# Membrane potential dynamics 
-# --------------------------------------------------------------
-plt_v = NetworkUtils.plot_membrane_potentials(model, neurons = 1)
-savefig(plt_v, "membrane_potentials_dynamic.png")
+    # Firing rate dynamics
+    frplt = NetworkUtils.plot_firing_rates(model, name = name)
 
-# --------------------------------------------------------------
-# STTC
-# --------------------------------------------------------------
-myspikes = SNN.spiketimes(model.pop)    
-sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
-println("STTC = ", sttc_value)
+    # Membrane potential dynamics 
+    plt_v = NetworkUtils.plot_membrane_potentials(model, neurons = 1, name = name)
 
+    if save_figs
+        savefig("plots_and_images/$name raster_full.png")
+        savefig(plt, "plots_and_images/$name raster_zoom.png")
+        savefig(frplt, "plots_and_images/$name firing_rates.png")
+        savefig(plt_v, "plots_and_images/$name membrane_potentials_dynamic.png")
+    end
 
-# %%
+    # STTC
+    myspikes = SNN.spiketimes(model.pop)    
+    sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
 
-# Function to change the sample resolution of the plots
-pop_spiketimes = SNN.spiketimes(model.pop.CE)
-subsample = pop_spiketimes[1:10:end]
-SNN.STTC(subsample, 10ms)
+    if csv
+        csvfile = "plots_and_images/sttc_results.csv"
+        if !isfile(csvfile) # if the file does not already exist
+            open(csvfile, "w") do io
+                write(io, "mu,p,sttc\n")
+            end
+        end
 
-#%%
+        open(csvfile, "a") do io
+            write(io, string(μ, ",", p, ",", sttc_value, "\n"))
+        end
 
-# %% [markdown]
-# VIP→SST Modulation Experiment
-
-base = TC3inhib_network.connections
-
-config_test = @update TC3inhib_network begin
-    connections = merge(base, (
-        VIP_to_SST=NetworkUtils.scaled_connection(base.CortVip_to_CortSst; μ_scale=1.5, p_scale=1.0),
-        PV_to_SST=NetworkUtils.scaled_connection(base.CortPv_to_CortSst; μ_scale=2.0, p_scale=1.0),
-        PV_to_CE=NetworkUtils.scaled_connection(base.CortPv_to_CortExc; μ_scale=1.5, p_scale=1.0),
-        SST_to_CE=NetworkUtils.scaled_connection(base.CortSst_to_CortExc; μ_scale=0.5, p_scale=1.0),
-    ))
+    else
+        open("plots_and_images/$name sttc_value.txt", "w") do io
+            write(io, string(sttc_value))
+        end
+    end
 end
 
+all_plots(model)
+
+# --------------------------------------------------------------
+# Epileptic-like activity (increasing CE_to_CE)
+# --------------------------------------------------------------
+
+TC3inhib_network_modified = (; TC3inhib_network..., 
+    connections = (; TC3inhib_network.connections..., 
+        CE_to_CE = (; TC3inhib_network.connections.CE_to_CE..., p = 0.15)
+    )
+)
+
+model = NetworkUtils.build_network(TC3inhib_network_modified)
+monitor!(model.pop, [:v], sr=1kHz)
+Random.seed!(TC3inhib_network_modified.seed)
+sim!(model, 3s)
+
+all_plots(model, name = "Epileptic-like state")
+
+# --------------------------------------------------------------
+# Thalamic increased connection (increasing TE_to_CE)
+# --------------------------------------------------------------
+
+p_values = [0.10, 0.15]
+
+for p in p_values
+    TC3inhib_network_modified = (; TC3inhib_network..., 
+        connections = (; TC3inhib_network.connections..., 
+            TE_to_CE = (; TC3inhib_network.connections.TE_to_CE..., p = p)
+        )
+    )
+
+    model = NetworkUtils.build_network(TC3inhib_network_modified)
+    monitor!(model.pop, [:v], sr=1kHz)
+    Random.seed!(TC3inhib_network_modified.seed)
+    sim!(model, 3s)
+
+    all_plots(model, name = "Thalamic increase p=$p")
+end
+
+# --------------------------------------------------------------
+# Slower inhibition test (increasing membrane time constant)
+# --------------------------------------------------------------
+
+TC3inhib_network_modified = (; TC3inhib_network..., 
+    synapse_PV  = SingleExpSynapse(τi=20ms, τe=5ms, E_i=-80mV, E_e=0mV),
+)
+
+model = NetworkUtils.build_network(TC3inhib_network_modified)
+monitor!(model.pop, [:v], sr=1kHz)
+Random.seed!(TC3inhib_network_modified.seed)
+sim!(model, 3s)
+
+all_plots(model, name = "Slower inhibition")
+
+
+# --------------------------------------------------------------
+# Modulations Experiments
+# --------------------------------------------------------------
+
+pops_to_modify = (:VIP_to_SST, :PV_to_CE, :SST_to_CE, :TE_to_CE)
 
 μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
-p_scales = [0.1, 0.2, 0.7, 1.0, 1.3]
+p_scales = [0.1, 0.2, 0.7, 1.0]
 
-results = Dict{NamedTuple,Float64}()
+for pop in pops_to_modify
+    for μ in μ_scales, p in p_scales
 
-for μ in μ_scales, p in p_scales
-    results[(μ, p)] = NetworkUtils.run_condition(
-        TC3inhib_network;
-        target=:CortVip_to_CortSst,
-        μ_scale=μ,
-        p_scale=p
+        modulation = (; TC3inhib_network.connections[pop]..., μ = μ, p = p)
+        TC3inhib_network_modified = (; TC3inhib_network...,
+            connections = (; TC3inhib_network.connections..., pop => modulation)
+        )
+
+        model = NetworkUtils.build_network(TC3inhib_network_modified)
+        monitor!(model.pop, [:v], sr=1kHz)
+        Random.seed!(TC3inhib_network_modified.seed)
+        sim!(model, 3s)
+
+        all_plots(model; name = "Modulation $pop p=$p and μ=$μ", save_figs=false, csv = true, μ = μ, p = p)
+    end
+
+    df = CSV.read("plots_and_images/Modulation $pop sttc_results.csv", DataFrame)
+    M = [ df[(df.μ .== μ) .& (df.p .== p), :sttc][1]
+          for μ in μ_scales, p in p_scales ]
+
+    sttc_heatmap = heatmap(
+        p_scales, μ_scales, M,
+        xlabel="p scale",
+        ylabel="μ scale",
+        title="Modulation $pop effect on synchrony"
     )
+
+    savefig(sttc_heatmap, "plots_and_images/Modulation $pop sttc_heatmap.png")
 end
 
-
-M = [results[(μ=μ, p=p)] for μ in μ_scales, p in p_scales]
-
-heatmap(
-    p_scales,
-    μ_scales,
-    M,
-    xlabel="p scale",
-    ylabel="μ scale",
-    title="VIP→SST modulation effect on synchrony"
-)
-
-# %% [markdown]
-# Cortical Feedback to Thalamus Sweep
-
-μ_scales = [0.5, 1.0, 1.5, 2.0, 3.0]
-p_scales = [0.05, 0.1, 0.2, 0.3]
-
-# Network with feedback
-#results_with = NetworkUtils.sweep_TC_feedback(TC3inhib_network; μ_scales=μ_scales, p_scales=p_scales)
-
-
-# Measure the onset of epileptic activity (STTC)
-myspikes = SNN.spiketimes(model.pop)[1:5:end]      # Subsample: only 1 every 5
-sttc_value = mean(SNN.STTC(myspikes, 50ms))
-
-#STTC over time
-
-μ_scales = [0.5, 1.0, 1.5, 2.0]
-
-tvals, result = NetworkUtils.sweep_sttc_time(TC3inhib_network; μ_scales=μ_scales)
-
-# build matrix: rows=time, columns=scaling
-
-H = hcat([result[(μ=μ, p=1.0)] for μ in μ_scales]...)
-
-heatmap(
-    tvals ./ 1s,    # convert to seconds
-    μ_scales,
-    H', #transpose H
-    xlabel="Time (s)",
-    ylabel="μ scaling",
-    title="STTC Over Time for VIP→SST Scaling",
-    colorbar_title="STTC"
-)
-
-# Visualize the spiking activity of the network with the new parameters.
-#
-# %%
-# Plot raster plot of the new network activity
-SNN.raster(model.pop, every=1,
-    title="Raster plot of the network for p=0.025, μ=10nS")    # Change the parameters accordingly
-
-# %%
-
-# Plot vector field plot of the new network activity
-SNN.vecplot(model.pop.CE, :v, neurons=13,
-    title="Vecplot of the network for p=0.025, μ=10nS",        # Change the parameters accordingly
-    xlabel="Time (s)",
-    ylabel="Potential (mV)",
-    lw=2,
-    c=:darkcyan)
-
-# %%
-# test 
