@@ -60,6 +60,8 @@ TC3inhib_network = (
         CE_to_CE = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_PV = (p=0.05, μ=2nS, rule=:Fixed),
         CE_to_TE = (p=0.05, μ=2nS, rule=:Fixed),
+        CE_to_SST = (p=0.05, μ=2nS, rule=:Fixed),
+        CE_to_VIP = (p=0.05, μ=2nS, rule=:Fixed),
 
         PV_to_CE  = (p=0.05, μ=10nS, rule=:Fixed),
         PV_to_PV  = (p=0.05, μ=10nS, rule=:Fixed),
@@ -98,7 +100,7 @@ function analysis(model; name = "Baseline", figs=true, csv=false, μ=nothing, p=
         plt = SNN.raster(model.pop,
                         every = 1,
                         title = "$name raster plot zoomed")
-        xlims!(plt, 0.5, 1.5) # Zoom x-axis
+        xlims!(plt, 2, 2.5) # Zoom x-axis
         ylims!(plt, 3500, 5200) # Zoom y-axis
         savefig(plt, "$img_path/$name raster_zoom.png")
 
@@ -170,29 +172,13 @@ for p in p_values
 end
 
 # --------------------------------------------------------------
-# Slower inhibition test (increasing PV membrane time constant)
-# --------------------------------------------------------------
-
-TC3inhib_network_modified = (; TC3inhib_network..., 
-    synapse_PV  = SingleExpSynapse(τi=20ms, τe=5ms, E_i=-80mV, E_e=0mV),
-)
-
-model = NetworkUtils.build_network(TC3inhib_network_modified)
-monitor!(model.pop, [:v], sr=1kHz)
-Random.seed!(TC3inhib_network_modified.seed)
-sim!(model, 3s)
-
-analysis(model, name = "Slower inhibition")
-
-
-# --------------------------------------------------------------
 # Modulations Experiments
 # --------------------------------------------------------------
 
 pops_to_modify = (:VIP_to_SST, :PV_to_CE, :SST_to_CE, :TE_to_CE)
 
-μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
-p_scales = [0.1, 0.2, 0.7, 1.0]
+μ_values = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
+p_values = [0.1, 0.2, 0.7, 1.0]
 
 for pop in pops_to_modify
 
@@ -201,7 +187,7 @@ for pop in pops_to_modify
         write(io, "mu,p,sttc\n")
     end
 
-    for μ in μ_scales, p in p_scales
+    for μ in μ_values, p in p_values
 
         modulation = (; TC3inhib_network.connections[pop]..., μ = μ, p = p)
         TC3inhib_network_modified = (; TC3inhib_network...,
@@ -218,10 +204,10 @@ for pop in pops_to_modify
 
     df = CSV.read("$img_path/Modulation $pop sttc_results.csv", DataFrame)
     M = [ df[(df.mu .== μ) .& (df.p .== p), :sttc][1]
-          for μ in μ_scales, p in p_scales ]
+          for μ in μ_values, p in p_values ]
 
     sttc_heatmap = heatmap(
-        p_scales, μ_scales, M,
+        p_values, μ_values, M,
         xlabel="p scale",
         ylabel="μ scale",
         title="Modulation $pop effect on synchrony",
@@ -231,3 +217,19 @@ for pop in pops_to_modify
 
     savefig(sttc_heatmap, "$img_path/Modulation $pop sttc_heatmap.png")
 end
+
+# --------------------------------------------------------------
+# Slower inhibition test (increasing PV membrane time constant)
+# --------------------------------------------------------------
+
+TC3inhib_network_modified = (; TC3inhib_network..., 
+    synapse_PV  = SingleExpSynapse(τi=20ms, τe=5ms, E_i=-80mV, E_e=0mV),
+)
+
+model = NetworkUtils.build_network(TC3inhib_network_modified)
+monitor!(model.pop, [:v], sr=1kHz)
+Random.seed!(TC3inhib_network_modified.seed)
+sim!(model, 3s)
+
+analysis(model, name = "Slower inhibition")
+

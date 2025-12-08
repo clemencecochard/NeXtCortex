@@ -42,6 +42,8 @@ function build_network(config)
         CE_to_CE = SpikingSynapse(CE, CE, :glu, conn=connections.CE_to_CE),
         CE_to_PV = SpikingSynapse(CE, PV, :glu, conn=connections.CE_to_PV),
         CE_to_TE = SpikingSynapse(CE, TE, :glu, conn=connections.CE_to_TE),
+        CE_to_SST = SpikingSynapse(CE, SST, :glu, conn=connections.CE_to_SST),
+        CE_to_VIP = SpikingSynapse(CE, VIP, :glu, conn=connections.CE_to_VIP),
 
         PV_to_CE  = SpikingSynapse(PV, CE,  :gaba, conn=connections.PV_to_CE),
         PV_to_PV  = SpikingSynapse(PV, PV,  :gaba, conn=connections.PV_to_PV),
@@ -87,7 +89,8 @@ function plot_firing_rates(model;
     # Plot all populations
     plt = plot(title="$name population firing rates",
                xlabel="Time (s)", ylabel="Firing rate (Hz)",
-               lw=2, legend=:topright)
+               lw=2, legend=:topright,
+               size = (400, 400))
     for p in pops
         plot!(plt, t, rates[p], label=String(p))
     end
@@ -100,11 +103,11 @@ function plot_membrane_potentials(model;
         legend = false,
         name = "")
 
-    plt = plot(layout=(length(pops),1), size=(800, 200*length(pops)), legend = legend)
+    plt = plot(layout=(length(pops),1), size=(400, 100*length(pops)), legend = legend)
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :blue)
     for (i,p) in enumerate(pops)
 
-        vp = SNN.vecplot(model.pop[p], :v, neurons=neurons)
+        vp = SNN.vecplot(model.pop[p], :v, neurons=neurons, add_spikes=true)
 
         for s in vp.series_list
             xs = s[:x]
@@ -112,7 +115,7 @@ function plot_membrane_potentials(model;
             plot!(plt[i], xs, ys, lw=1.5, c=colors[i])
         end
 
-        title!(plt[i], "$name $p")
+        title!(plt[i], "$name membrane potential - $p")
         xlabel!(plt[i], "Time (s)")
         ylabel!(plt[i], "V (mV)")
     end
