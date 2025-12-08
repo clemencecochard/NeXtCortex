@@ -191,8 +191,8 @@ analysis(model, name = "Slower inhibition")
 
 pops_to_modify = (:VIP_to_SST, :PV_to_CE, :SST_to_CE, :TE_to_CE)
 
-μ_scales = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
-p_scales = [0.1, 0.2, 0.7, 1.0]
+μ_values = [0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10]
+p_values = [0.1, 0.2, 0.7, 1.0]
 
 for pop in pops_to_modify
 
@@ -201,7 +201,7 @@ for pop in pops_to_modify
         write(io, "mu,p,sttc\n")
     end
 
-    for μ in μ_scales, p in p_scales
+    for μ in μ_values, p in p_values
 
         modulation = (; TC3inhib_network.connections[pop]..., μ = μ, p = p)
         TC3inhib_network_modified = (; TC3inhib_network...,
@@ -218,10 +218,10 @@ for pop in pops_to_modify
 
     df = CSV.read("$img_path/Modulation $pop sttc_results.csv", DataFrame)
     M = [ df[(df.mu .== μ) .& (df.p .== p), :sttc][1]
-          for μ in μ_scales, p in p_scales ]
+          for μ in μ_values, p in p_values ]
 
     sttc_heatmap = heatmap(
-        p_scales, μ_scales, M,
+        p_values, μ_values, M,
         xlabel="p scale",
         ylabel="μ scale",
         title="Modulation $pop effect on synchrony",
