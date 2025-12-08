@@ -89,7 +89,8 @@ function plot_firing_rates(model;
     # Plot all populations
     plt = plot(title="$name population firing rates",
                xlabel="Time (s)", ylabel="Firing rate (Hz)",
-               lw=2, legend=:topright)
+               lw=2, legend=:topright,
+               size = (400, 400))
     for p in pops
         plot!(plt, t, rates[p], label=String(p))
     end
@@ -102,7 +103,7 @@ function plot_membrane_potentials(model;
         legend = false,
         name = "")
 
-    plt = plot(layout=(length(pops),1), size=(800, 200*length(pops)), legend = legend)
+    plt = plot(layout=(length(pops),1), size=(400, 100*length(pops)), legend = legend)
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :blue)
     for (i,p) in enumerate(pops)
 

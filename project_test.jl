@@ -172,22 +172,6 @@ for p in p_values
 end
 
 # --------------------------------------------------------------
-# Slower inhibition test (increasing PV membrane time constant)
-# --------------------------------------------------------------
-
-TC3inhib_network_modified = (; TC3inhib_network..., 
-    synapse_PV  = SingleExpSynapse(τi=20ms, τe=5ms, E_i=-80mV, E_e=0mV),
-)
-
-model = NetworkUtils.build_network(TC3inhib_network_modified)
-monitor!(model.pop, [:v], sr=1kHz)
-Random.seed!(TC3inhib_network_modified.seed)
-sim!(model, 3s)
-
-analysis(model, name = "Slower inhibition")
-
-
-# --------------------------------------------------------------
 # Modulations Experiments
 # --------------------------------------------------------------
 
@@ -233,3 +217,19 @@ for pop in pops_to_modify
 
     savefig(sttc_heatmap, "$img_path/Modulation $pop sttc_heatmap.png")
 end
+
+# --------------------------------------------------------------
+# Slower inhibition test (increasing PV membrane time constant)
+# --------------------------------------------------------------
+
+TC3inhib_network_modified = (; TC3inhib_network..., 
+    synapse_PV  = SingleExpSynapse(τi=20ms, τe=5ms, E_i=-80mV, E_e=0mV),
+)
+
+model = NetworkUtils.build_network(TC3inhib_network_modified)
+monitor!(model.pop, [:v], sr=1kHz)
+Random.seed!(TC3inhib_network_modified.seed)
+sim!(model, 3s)
+
+analysis(model, name = "Slower inhibition")
+
