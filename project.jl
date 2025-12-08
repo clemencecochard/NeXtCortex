@@ -100,7 +100,7 @@ TC3inhib_network = (
         ThalExc_to_CortExc=(p=0.05, μ=4nS, rule=:Fixed),
         ThalExc_to_CortPv=(p=0.05, μ=4nS, rule=:Fixed),
         # from CortExc
-        CortExc_to_CortExc = (p=0.05, μ=2nS, rule=:Fixed),
+        CortExc_to_CortExc = (p=0.15, μ=2nS, rule=:Fixed),
         CortExc_to_CortPv = (p=0.05, μ=2nS, rule=:Fixed),
         CortExc_to_ThalExc = (p=0.05, μ=2nS, rule=:Fixed),        # CE_to_TE connection added
         # from CortPv
@@ -179,7 +179,7 @@ time_axis = 0:20:3000
 # === CE ===
 rates_CE = SNN.firing_rate(model.pop.CE, time_axis, sampling=20ms, τ=25ms)
 rates_CE_mat = rates_CE[1]
-t = collect(rates_CE[2]) ./ 1000   # 秒
+t = collect(rates_CE[2]) ./ 1000   
 pop_CE = vec(mean(rates_CE_mat, dims=1))
 # === PV ===
 rates_PV = SNN.firing_rate(model.pop.PV, time_axis, sampling=20ms, τ=25ms)
