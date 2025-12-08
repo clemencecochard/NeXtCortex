@@ -101,7 +101,7 @@ savefig(frplt, "firing_rates.png")
 # --------------------------------------------------------------
 # Membrane potential dynamics 
 # --------------------------------------------------------------
-plt_v = NetworkUtils.plot_membrane_potentials(model)
+plt_v = NetworkUtils.plot_membrane_potentials(model, neurons = 1)
 savefig(plt_v, "membrane_potentials_dynamic.png")
 
 # --------------------------------------------------------------
