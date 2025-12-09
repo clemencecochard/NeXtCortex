@@ -71,11 +71,12 @@ function plot_firing_rates(model;
         τ = 25ms,
         T = 3s,
         name = "")
-    # Build time axis (Unitful-safe)
-    time_axis = 0ms:dt:T
-    # Storage
+
+    time_axis = 0ms:dt:T #time axis
+    colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
     rates = Dict{Symbol, Vector{Float64}}()
     t = nothing
+
     # Compute firing rate per population
     for p in pops
         rates_mat, t_vec = SNN.firing_rate(model.pop[p], time_axis;
@@ -86,13 +87,14 @@ function plot_firing_rates(model;
         t = Float64.(t_vec) ./ 1000
         rates[p] = pop_rate
     end
+
     # Plot all populations
     plt = plot(title="$name population firing rates",
                xlabel="Time (s)", ylabel="Firing rate (Hz)",
                lw=2, legend=:topright,
                size = (600, 400))
-    for p in pops
-        plot!(plt, t, rates[p], label=String(p))
+    for (i, p) in enumerate(pops)
+        plot!(plt, t, rates[p], label=String(p), color=colors[i])
     end
     return plt
 end
@@ -103,8 +105,13 @@ function plot_membrane_potentials(model;
         legend = false,
         name = "")
 
-    plt = plot(layout=(length(pops),1), size=(600, 150*length(pops)), legend = legend)
-    colors = (:darkorange, :darkgreen, :purple, :darkcyan, :blue)
+    plt = plot(layout=(length(pops),1), 
+               size=(600, 150*length(pops)), 
+               legend=legend,
+               bottom_margin=-2Plots.mm,
+               top_margin=-2Plots.mm)
+    
+    colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
     for (i,p) in enumerate(pops)
 
         vp = SNN.vecplot(model.pop[p], :v, neurons=neurons, add_spikes=true)
@@ -115,9 +122,27 @@ function plot_membrane_potentials(model;
             plot!(plt[i], xs, ys, lw=1.5, c=colors[i])
         end
 
-        title!(plt[i], "$name membrane potential - $p", titlefontsize = 10)
-        xlabel!(plt[i], "Time (s)", fontsize = 1)
-        ylabel!(plt[i], "V (mV)", fontsize = 1)
+        if i == length(pops)
+            plot!(plt[i], 
+                  title="$name membrane potentials $p",
+                  xlabel="Time (s)",
+                  ylabel="V (mV)",
+                  titlefontsize=9,
+                  xguidefontsize=8,
+                  yguidefontsize=8,
+                  xtickfontsize=7,
+                  ytickfontsize=7)
+        else
+            plot!(plt[i], 
+                  title="$name membrane potentials $p",
+                  ylabel="V (mV)",
+                  titlefontsize=9,
+                  xguidefontsize=8,
+                  yguidefontsize=8,
+                  xtickfontsize=7,
+                  ytickfontsize=7,
+                  xaxis=false)
+        end
     end
 
     return plt
