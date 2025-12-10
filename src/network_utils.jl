@@ -9,7 +9,7 @@ using Plots
 
 SNN.@load_units
 
-import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update
+import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, STTC
 
 function build_network(config)
     @unpack seed = config
