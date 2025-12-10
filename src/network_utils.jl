@@ -142,7 +142,7 @@ function plot_membrane_potentials(model;
     return plt
 end
 
-function analysis(model; name = "Baseline", figs=true, save_figs=true, csv=false, μ=nothing, p=nothing)
+function analysis(model, img_path; name = "Baseline", figs=true, save_figs=true, csv=false, μ=nothing, p=nothing)
     
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
 
