@@ -6,52 +6,46 @@ using Random
 using Statistics
 using Unitful
 using Plots
+using DSP
+using DSP.Windows
 
 SNN.@load_units
 
-import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, STTC
+import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, STTC, bin_spiketimes
 
 function build_network(config)
     @unpack seed = config
     Random.seed!(seed)
 
     @unpack afferents_to_TE, afferents_to_CE, afferents_to_PV,
-        afferents_to_SST, afferents_to_VIP, connections, Npop,
-        spike, spike_PV, spike_SST, spike_VIP,
-        exc, inh_PV, inh_SST, inh_VIP,
-        synapse, synapse_PV, synapse_SST, synapse_VIP = config
+    afferents_to_SST, afferents_to_VIP, connections, Npop,
+    spike, spike_PV, spike_SST, spike_VIP,
+    exc, inh_PV, inh_SST, inh_VIP,
+    synapse, synapse_PV, synapse_SST, synapse_VIP = config
 
-    TE  = Population(exc;        synapse,       spike,       N=Npop.TE,     name="TE")
-    CE  = Population(exc;        synapse,       spike,       N=Npop.CE,     name="CE")
-    PV  = Population(inh_PV;     synapse=synapse_PV,  spike=spike_PV,  N=Npop.PV, name="PV")
-    SST = Population(inh_SST;    synapse=synapse_SST, spike=spike_SST, N=Npop.SST,name="SST")
-    VIP = Population(inh_VIP;    synapse=synapse_VIP, spike=spike_VIP, N=Npop.VIP,name="VIP")
+    TE = Population(exc; synapse, spike, N=Npop.TE, name="TE")
+    CE = Population(exc; synapse, spike, N=Npop.CE, name="CE")
+    PV = Population(inh_PV; synapse=synapse_PV, spike=spike_PV, N=Npop.PV, name="PV")
+    SST = Population(inh_SST; synapse=synapse_SST, spike=spike_SST, N=Npop.SST, name="SST")
+    VIP = Population(inh_VIP; synapse=synapse_VIP, spike=spike_VIP, N=Npop.VIP, name="VIP")
 
-    aff_TE  = Stimulus(afferents_to_TE.layer, TE,  :glu, conn=afferents_to_TE.conn)
-    aff_CE  = Stimulus(afferents_to_CE.layer, CE,  :glu, conn=afferents_to_CE.conn)
-    aff_PV  = Stimulus(afferents_to_PV.layer,  PV,  :glu, conn=afferents_to_PV.conn)
+    aff_TE = Stimulus(afferents_to_TE.layer, TE, :glu, conn=afferents_to_TE.conn)
+    aff_CE = Stimulus(afferents_to_CE.layer, CE, :glu, conn=afferents_to_CE.conn)
+    aff_PV = Stimulus(afferents_to_PV.layer, PV, :glu, conn=afferents_to_PV.conn)
     aff_SST = Stimulus(afferents_to_SST.layer, SST, :glu, conn=afferents_to_SST.conn)
     aff_VIP = Stimulus(afferents_to_VIP.layer, VIP, :glu, conn=afferents_to_VIP.conn)
 
     syns = (
-        TE_to_CE = SpikingSynapse(TE, CE, :glu,  conn=connections.TE_to_CE),
-        TE_to_PV = SpikingSynapse(TE, PV, :glu,  conn=connections.TE_to_PV),
-
-        CE_to_CE = SpikingSynapse(CE, CE, :glu, conn=connections.CE_to_CE),
-        CE_to_PV = SpikingSynapse(CE, PV, :glu, conn=connections.CE_to_PV),
-        CE_to_TE = SpikingSynapse(CE, TE, :glu, conn=connections.CE_to_TE),
-        CE_to_SST = SpikingSynapse(CE, SST, :glu, conn=connections.CE_to_SST),
-        CE_to_VIP = SpikingSynapse(CE, VIP, :glu, conn=connections.CE_to_VIP),
-
-        PV_to_CE  = SpikingSynapse(PV, CE,  :gaba, conn=connections.PV_to_CE),
-        PV_to_PV  = SpikingSynapse(PV, PV,  :gaba, conn=connections.PV_to_PV),
-        PV_to_SST = SpikingSynapse(PV, SST, :gaba, conn=connections.PV_to_SST),
-
-        SST_to_CE  = SpikingSynapse(SST, CE,  :gaba, conn=connections.SST_to_CE),
-        SST_to_PV  = SpikingSynapse(SST, PV,  :gaba, conn=connections.SST_to_PV),
-        SST_to_VIP = SpikingSynapse(SST, VIP, :gaba, conn=connections.SST_to_VIP),
-
-        VIP_to_SST = SpikingSynapse(VIP, SST, :gaba, conn=connections.VIP_to_SST),
+        TE_to_CE=SpikingSynapse(TE, CE, :glu, conn=connections.TE_to_CE),
+        TE_to_PV=SpikingSynapse(TE, PV, :glu, conn=connections.TE_to_PV), CE_to_CE=SpikingSynapse(CE, CE, :glu, conn=connections.CE_to_CE),
+        CE_to_PV=SpikingSynapse(CE, PV, :glu, conn=connections.CE_to_PV),
+        CE_to_TE=SpikingSynapse(CE, TE, :glu, conn=connections.CE_to_TE),
+        CE_to_SST=SpikingSynapse(CE, SST, :glu, conn=connections.CE_to_SST),
+        CE_to_VIP=SpikingSynapse(CE, VIP, :glu, conn=connections.CE_to_VIP), PV_to_CE=SpikingSynapse(PV, CE, :gaba, conn=connections.PV_to_CE),
+        PV_to_PV=SpikingSynapse(PV, PV, :gaba, conn=connections.PV_to_PV),
+        PV_to_SST=SpikingSynapse(PV, SST, :gaba, conn=connections.PV_to_SST), SST_to_CE=SpikingSynapse(SST, CE, :gaba, conn=connections.SST_to_CE),
+        SST_to_PV=SpikingSynapse(SST, PV, :gaba, conn=connections.SST_to_PV),
+        SST_to_VIP=SpikingSynapse(SST, VIP, :gaba, conn=connections.SST_to_VIP), VIP_to_SST=SpikingSynapse(VIP, SST, :gaba, conn=connections.VIP_to_SST),
     )
 
     model = compose(; TE, CE, PV, SST, VIP,
@@ -65,21 +59,21 @@ end
 
 
 function plot_firing_rates(model;
-        pops = (:TE, :CE, :PV, :SST, :VIP),
-        dt = 20ms,
-        τ = 25ms,
-        T = 3s,
-        name = "",
-        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
+    pops=(:TE, :CE, :PV, :SST, :VIP),
+    dt=20ms,
+    τ=25ms,
+    T=3s,
+    name="",
+    colors=(:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
 
     time_axis = 0ms:dt:T #time axis
-    rates = Dict{Symbol, Vector{Float64}}()
+    rates = Dict{Symbol,Vector{Float64}}()
     t = nothing
 
     # Compute firing rate per population
     for p in pops
         rates_mat, t_vec = SNN.firing_rate(model.pop[p], time_axis;
-                                           sampling=dt, τ=τ)
+            sampling=dt, τ=τ)
         # mean across neurons
         pop_rate = vec(mean(rates_mat, dims=1))
         # convert ms → s
@@ -89,117 +83,139 @@ function plot_firing_rates(model;
 
     # Plot all populations
     plt = plot(title="$name population firing rates",
-               xlabel="Time (s)", ylabel="Firing rate (Hz)",
-               lw=2, legend=:topright,
-               size = (600, 400))
+        xlabel="Time (s)", ylabel="Firing rate (Hz)",
+        lw=2, legend=:topright,
+        size=(600, 400))
     for (i, p) in enumerate(pops)
         plot!(plt, t, rates[p], label=String(p), color=colors[i])
     end
     return plt
 end
 
-function plot_LFP(model;pops = (:CE,), σ_ms=1.0, dt_ms=0.1, T_ms=3000.0;
-    spk = SNN.spiketimes(model.pop),
-    npts = Int(round(T_ms/dt_ms)) + 1,
-    pop_signal = zeros(Float64, npts)
+function plot_LFP(model; pops=(:CE,), σ_ms=1.0, dt_ms=0.1, T_ms=3000.0)
+    # with DSP Gaussian kernel
+    spk_dict = SNN.spiketimes(model.pop)
+    available_pops = filter(p -> p in keys(spk_dict), pops)
 
-    for neuron_spikes in spk
-        for t in neuron_spikes
-            idx = Int(round(t/dt_ms)) + 1
-            if 1 ≤ idx ≤ npts
-                pop_signal[idx] += 1
-            end
-        end
+    all_spike_times = []
+    for pop in available_pops
+        append!(all_spike_times, spk_dict[pop])
+    end
+    spikes_flat = vcat(all_spike_times...)
+
+    interval = 0:dt_ms:T_ms
+    pop_signal, _ = bin_spiketimes(spikes_flat; interval=interval, do_sparse=false)
+    npts = length(pop_signal)
+
+    σ_steps = Float64(σ_ms / dt_ms)
+    kernel_len = Int(round(6 * σ_steps))
+    kernel_len = max(kernel_len, 3)
+
+    if iseven(kernel_len)
+        kernel_len += 1
     end
 
-    σ_steps = Int(round(σ_ms/dt_ms))    # std in index units
-    ll = 6*σ_steps                      # kernel length = 6σ
-    ll = max(ll, 3)                     # avoid too short kernels
+    α = (kernel_len - 1) / (2 * σ_steps)
+    kernel = DSP.Windows.gaussian(kernel_len, α)
 
-    kernel = gaussian_kernel(σ_steps, ll)
+    kernel ./= sum(kernel)
 
-    lfp = conv(pop_signal, kernel, pad=true)
-    t = ((0:(npts-1)) .* dt_ms) ./ 1000.0
+    lfp_full = conv(pop_signal, kernel)
+
+    kernel_half = div(length(kernel), 2)
+    start_idx = kernel_half + 1
+    end_idx = start_idx + npts - 1
+
+    if end_idx > length(lfp_full)
+        lfp_full = vcat(lfp_full, zeros(end_idx - length(lfp_full)))
+    end
+
+    lfp = lfp_full[start_idx:end_idx]
+
+    t = collect(interval) ./ 1000.0
     plt = plot(t, lfp,
-        xlabel = "Time (s)",
-        ylabel = "LFP (a.u.)",
-        lw = 1.5,
-        color = :black,
-        title = "CE-derived LFP")
+        xlabel="Time (s)",
+        ylabel="LFP (a.u.)",
+        lw=1.5,
+        color=:black,
+        title="CE LFP (DSP Gaussian, σ=$(σ_ms)ms)",
+        legend=false
+    )
+
     return plt
 end
 
 
 function plot_membrane_potentials(model;
-        pops = (:TE, :CE, :PV, :SST, :VIP),
-        neurons = 1:5,
-        legend = false,
-        name = "",
-        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
+    pops=(:TE, :CE, :PV, :SST, :VIP),
+    neurons=1:5,
+    legend=false,
+    name="",
+    colors=(:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
 
-    plt = plot(layout=(length(pops),1), 
-               size=(600, 150*length(pops)), 
-               legend=legend,
-               bottom_margin=-2Plots.mm,
-               top_margin=-2Plots.mm,
-               ylabel="V (mV)",
-               ylims = (-80, 10)
-               titlefontsize=11,
-               xguidefontsize=8,
-               yguidefontsize=8,
-               xtickfontsize=7,
-               ytickfontsize=7)
-    
-    for (i,p) in enumerate(pops)
+    plt = plot(layout=(length(pops), 1),
+        size=(600, 150 * length(pops)),
+        legend=legend,
+        bottom_margin=-2Plots.mm,
+        top_margin=-2Plots.mm,
+        ylabel="V (mV)",
+        ylims=(-80, 10),
+        titlefontsize=11,
+        xguidefontsize=8,
+        yguidefontsize=8,
+        xtickfontsize=7,
+        ytickfontsize=7)
+
+    for (i, p) in enumerate(pops)
 
         vp = SNN.vecplot(model.pop[p], :v, neurons=neurons, add_spikes=true)
 
         for s in vp.series_list
             xs = s[:x]
             ys = s[:y]
-            plot!(plt[i], xs, ys, lw=1.5, c=colors[i], label=String(p), legend = i)
+            plot!(plt[i], xs, ys, lw=1.5, c=colors[i], label=String(p), legend=i)
         end
 
         if i == 1
-            plot!(plt[i], 
-                  title="$name membrane potentials",
-                  xaxis=false)
+            plot!(plt[i],
+                title="$name membrane potentials",
+                xaxis=false)
         elseif i == length(pops)
             plot!(plt[i],
-                  xlabel="Time (s)")
+                xlabel="Time (s)")
         else
             plot!(plt[i],
-                  xaxis=false)
+                xaxis=false)
         end
     end
 
     return plt
 end
 
-function analysis(model, img_path; name = "Baseline", figs=true, save_figs=true, csv=false, μ=nothing, p=nothing)
-    
+function analysis(model, img_path; name="Baseline", figs=true, save_figs=true, csv=false, μ=nothing, p=nothing)
+
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
 
     if figs
-        # Raster plot
-        rplt = SNN.raster(model.pop, every=1, title="$name raster plot")
-
-        zrplt = SNN.raster(model.pop, every = 1, title = "$name raster plot zoomed")
-        xlims!(zrplt, 2, 2.5) # Zoom x-axis
-        ylims!(zrplt, 3500, 5200) # Zoom y-axis
-
         #LFP plot
         lplt = NetworkUtils.plot_LFP(model)
 
+        # Raster plot
+        rplt = SNN.raster(model.pop, every=1, title="$name raster plot")
+
+        zrplt = SNN.raster(model.pop, every=1, title="$name raster plot zoomed")
+        xlims!(zrplt, 2, 2.5) # Zoom x-axis
+        ylims!(zrplt, 3500, 5200) # Zoom y-axis
+
         # Firing rate dynamics
-        frplt = NetworkUtils.plot_firing_rates(model, name = name, colors = colors)
+        frplt = NetworkUtils.plot_firing_rates(model, name=name, colors=colors)
 
         # Membrane potential dynamics 
-        vplt = NetworkUtils.plot_membrane_potentials(model, neurons = 1, name = name, colors = colors)
-        
+        vplt = NetworkUtils.plot_membrane_potentials(model, neurons=1, name=name, colors=colors)
+
         if save_figs
             savefig(zrplt, "$img_path/$name raster_zoom.png")
-            savefig(l_plt, "$img_path/$name LFP.png")
+            savefig(lplt, "$img_path/$name LFP.png")
             savefig(frplt, "$img_path/$name firing_rates.png")
             savefig(rplt, "$img_path/$name raster_full.png")
             savefig(vplt, "$img_path/$name membrane_potentials_dynamic.png")
@@ -207,8 +223,8 @@ function analysis(model, img_path; name = "Baseline", figs=true, save_figs=true,
     end
 
     # STTC
-    myspikes = SNN.spiketimes(model.pop)    
-    sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
+    myspikes = SNN.spiketimes(model.pop)
+    sttc_value = mean(STTC(myspikes[1:5:end], 50ms)) # Using subsampled myspikes: only 1 every 5
 
     if csv
         csvfile = "$img_path/$name sttc_results.csv"
@@ -223,26 +239,26 @@ function analysis(model, img_path; name = "Baseline", figs=true, save_figs=true,
         end
     end
     if figs
-        return rplt, zrplt,lplt, frplt, vplt
+        return lplt, rplt, zrplt, frplt, vplt
     else
         return nothing, nothing, nothing, nothing
     end
 end
 
-function sttc_timeseries(model; window = 50ms, step = 10ms, sim_time = 3.0)
+function sttc_timeseries(model; window=50ms, step=10ms, sim_time=3.0)
     myspikes = SNN.spiketimes(model.pop)
     t = 0:step:sim_time-window
     sttc = Float64[]
     for ti in t
         spikes_window = map(myspikes) do s
-            s[(s .≥ ti) .& (s .< ti + window)]
+            s[(s.≥ti).&(s.<ti+window)]
         end
         push!(sttc, mean(STTC(spikes_window, window)))
     end
     return t, sttc
 end
 
-function transition_time(t, sttc; high = 0.8, sim_time = 3.0)
+function transition_time(t, sttc; high=0.8, sim_time=3.0)
     idx = findfirst(x -> x ≥ high, sttc)
     return idx === nothing ? sim_time : t[idx]
 end
@@ -252,14 +268,14 @@ function average_transition_time(network, pop, μ, p; seeds=1:10)
     for s in seeds
         Random.seed!(s)
 
-        modulation = (; network.connections[pop]..., μ = μ, p = p)
+        modulation = (; network.connections[pop]..., μ=μ, p=p)
         network_modified = (; network...,
-            connections = (; network.connections..., pop => modulation)
+            connections=(; network.connections..., pop => modulation)
         )
         model = NetworkUtils.build_network(network_modified)
         monitor!(model.pop, [:v], sr=1kHz)
         sim!(model, 3s)
-        
+
         t, sttc = sttc_timeseries(model)
         tt = transition_time(t, sttc)
         push!(times, tt)
