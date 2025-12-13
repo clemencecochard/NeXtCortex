@@ -6,13 +6,10 @@ using Random
 using Statistics
 using Unitful
 using Plots
-using DSP
 
 SNN.@load_units
 
-import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, @update
-
-export build_network, plot_firing_rates, plot_membrane_potentials, plot_LFP
+import SpikingNeuralNetworks: Population, Stimulus, SpikingSynapse, compose, monitor!, sim!, @update, STTC
 
 function build_network(config)
     @unpack seed = config
@@ -66,17 +63,19 @@ function build_network(config)
     return model
 end
 
+
 function plot_firing_rates(model;
         pops = (:TE, :CE, :PV, :SST, :VIP),
         dt = 20ms,
         τ = 25ms,
         T = 3s,
-        name = "")
-    # Build time axis (Unitful-safe)
-    time_axis = 0ms:dt:T
-    # Storage
+        name = "",
+        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
+
+    time_axis = 0ms:dt:T #time axis
     rates = Dict{Symbol, Vector{Float64}}()
     t = nothing
+
     # Compute firing rate per population
     for p in pops
         rates_mat, t_vec = SNN.firing_rate(model.pop[p], time_axis;
@@ -87,25 +86,70 @@ function plot_firing_rates(model;
         t = Float64.(t_vec) ./ 1000
         rates[p] = pop_rate
     end
+
     # Plot all populations
     plt = plot(title="$name population firing rates",
                xlabel="Time (s)", ylabel="Firing rate (Hz)",
                lw=2, legend=:topright,
                size = (600, 400))
-    for p in pops
-        plot!(plt, t, rates[p], label=String(p))
+    for (i, p) in enumerate(pops)
+        plot!(plt, t, rates[p], label=String(p), color=colors[i])
     end
     return plt
 end
+
+function plot_LFP(model;pops = (:CE,), σ_ms=1.0, dt_ms=0.1, T_ms=3000.0;
+    spk = SNN.spiketimes(model.pop),
+    npts = Int(round(T_ms/dt_ms)) + 1,
+    pop_signal = zeros(Float64, npts)
+
+    for neuron_spikes in spk
+        for t in neuron_spikes
+            idx = Int(round(t/dt_ms)) + 1
+            if 1 ≤ idx ≤ npts
+                pop_signal[idx] += 1
+            end
+        end
+    end
+
+    σ_steps = Int(round(σ_ms/dt_ms))    # std in index units
+    ll = 6*σ_steps                      # kernel length = 6σ
+    ll = max(ll, 3)                     # avoid too short kernels
+
+    kernel = gaussian_kernel(σ_steps, ll)
+
+    lfp = conv(pop_signal, kernel, pad=true)
+    t = ((0:(npts-1)) .* dt_ms) ./ 1000.0
+    plt = plot(t, lfp,
+        xlabel = "Time (s)",
+        ylabel = "LFP (a.u.)",
+        lw = 1.5,
+        color = :black,
+        title = "CE-derived LFP")
+    return plt
+end
+
 
 function plot_membrane_potentials(model;
         pops = (:TE, :CE, :PV, :SST, :VIP),
         neurons = 1:5,
         legend = false,
-        name = "")
+        name = "",
+        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
 
-    plt = plot(layout=(length(pops),1), size=(600, 150*length(pops)), legend = legend)
-    colors = (:darkorange, :darkgreen, :purple, :darkcyan, :blue)
+    plt = plot(layout=(length(pops),1), 
+               size=(600, 150*length(pops)), 
+               legend=legend,
+               bottom_margin=-2Plots.mm,
+               top_margin=-2Plots.mm,
+               ylabel="V (mV)",
+               ylims = (-80, 10)
+               titlefontsize=11,
+               xguidefontsize=8,
+               yguidefontsize=8,
+               xtickfontsize=7,
+               ytickfontsize=7)
+    
     for (i,p) in enumerate(pops)
 
         vp = SNN.vecplot(model.pop[p], :v, neurons=neurons, add_spikes=true)
@@ -113,43 +157,116 @@ function plot_membrane_potentials(model;
         for s in vp.series_list
             xs = s[:x]
             ys = s[:y]
-            plot!(plt[i], xs, ys, lw=1.5, c=colors[i])
+            plot!(plt[i], xs, ys, lw=1.5, c=colors[i], label=String(p), legend = i)
         end
 
-        title!(plt[i], "$name membrane potential - $p", titlefontsize = 10)
-        xlabel!(plt[i], "Time (s)", fontsize = 1)
-        ylabel!(plt[i], "V (mV)", fontsize = 1)
+        if i == 1
+            plot!(plt[i], 
+                  title="$name membrane potentials",
+                  xaxis=false)
+        elseif i == length(pops)
+            plot!(plt[i],
+                  xlabel="Time (s)")
+        else
+            plot!(plt[i],
+                  xaxis=false)
+        end
     end
 
     return plt
 end
-#function plot_LFP(model;(pop_spiketimes::Vector{Vector{Float32}}; dt=1e-4, T=10.0)
-    t = 0:dt:T
-    Nt = length(t)
-    pop_spikes = zeros(Float64, Nt)
 
-    #
-    @inbounds for neuron_spikes in pop_spiketimes
-        for spike_time in neuron_spikes
-            idx = round(Int, spike_time / dt) + 1
-            if 1 ≤ idx ≤ Nt
-                pop_spikes[idx] += 1.0
-            end
+function analysis(model, img_path; name = "Baseline", figs=true, save_figs=true, csv=false, μ=nothing, p=nothing)
+    
+    colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
+
+    if figs
+        # Raster plot
+        rplt = SNN.raster(model.pop, every=1, title="$name raster plot")
+
+        zrplt = SNN.raster(model.pop, every = 1, title = "$name raster plot zoomed")
+        xlims!(zrplt, 2, 2.5) # Zoom x-axis
+        ylims!(zrplt, 3500, 5200) # Zoom y-axis
+
+        #LFP plot
+        lplt = NetworkUtils.plot_LFP(model)
+
+        # Firing rate dynamics
+        frplt = NetworkUtils.plot_firing_rates(model, name = name, colors = colors)
+
+        # Membrane potential dynamics 
+        vplt = NetworkUtils.plot_membrane_potentials(model, neurons = 1, name = name, colors = colors)
+        
+        if save_figs
+            savefig(zrplt, "$img_path/$name raster_zoom.png")
+            savefig(l_plt, "$img_path/$name LFP.png")
+            savefig(frplt, "$img_path/$name firing_rates.png")
+            savefig(rplt, "$img_path/$name raster_full.png")
+            savefig(vplt, "$img_path/$name membrane_potentials_dynamic.png")
         end
     end
 
-    # 1ms 
-    σ = 1e-3
-    kernel_t = range(-5σ, 5σ, step=dt)
-    gauss_kernel = @. exp(-kernel_t^2 / (2σ^2))
-    gauss_kernel ./= sum(gauss_kernel)
+    # STTC
+    myspikes = SNN.spiketimes(model.pop)    
+    sttc_value = mean(STTC(myspikes[1:5:end]  , 50ms)) # Using subsampled myspikes: only 1 every 5
 
-    # 卷积
-    lfp_full = conv(pop_spikes, gauss_kernel)
-    offset = length(gauss_kernel) ÷ 2
-    lfp = lfp_full[offset+1:offset+Nt]
-    
-    return lfp, collect(t)
+    if csv
+        csvfile = "$img_path/$name sttc_results.csv"
+
+        open(csvfile, "a") do io
+            write(io, string(μ, ",", p, ",", sttc_value, "\n"))
+        end
+
+    else
+        open("$img_path/$name sttc_value.txt", "w") do io
+            write(io, string(sttc_value))
+        end
+    end
+    if figs
+        return rplt, zrplt,lplt, frplt, vplt
+    else
+        return nothing, nothing, nothing, nothing
+    end
 end
+
+function sttc_timeseries(model; window = 50ms, step = 10ms, sim_time = 3.0)
+    myspikes = SNN.spiketimes(model.pop)
+    t = 0:step:sim_time-window
+    sttc = Float64[]
+    for ti in t
+        spikes_window = map(myspikes) do s
+            s[(s .≥ ti) .& (s .< ti + window)]
+        end
+        push!(sttc, mean(STTC(spikes_window, window)))
+    end
+    return t, sttc
 end
-# module
+
+function transition_time(t, sttc; high = 0.8, sim_time = 3.0)
+    idx = findfirst(x -> x ≥ high, sttc)
+    return idx === nothing ? sim_time : t[idx]
+end
+
+function average_transition_time(network, pop, μ, p; seeds=1:10)
+    times = Float64[]
+    for s in seeds
+        Random.seed!(s)
+
+        modulation = (; network.connections[pop]..., μ = μ, p = p)
+        network_modified = (; network...,
+            connections = (; network.connections..., pop => modulation)
+        )
+        model = NetworkUtils.build_network(network_modified)
+        monitor!(model.pop, [:v], sr=1kHz)
+        sim!(model, 3s)
+        
+        t, sttc = sttc_timeseries(model)
+        tt = transition_time(t, sttc)
+        push!(times, tt)
+    end
+    return mean(times)
+end
+
+
+
+end
