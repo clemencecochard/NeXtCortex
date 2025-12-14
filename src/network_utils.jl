@@ -130,7 +130,8 @@ function plot_firing_rates(model;
         τ = 25ms,
         T = 3s,
         name = "",
-        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
+        colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue),
+    )
 
     time_axis = 0ms:dt:T
     rates = Dict{Symbol, Vector{Float64}}()
@@ -151,8 +152,11 @@ function plot_firing_rates(model;
 
     plt = plot(
         title="$name population firing rates",
-        xlabel="Time (s)", ylabel="Firing rate (Hz)",
-        lw=2, legend=:topright, size=(600, 400)
+        xlabel="Time (s)", 
+        ylabel="Firing rate (Hz)",
+        lw=2, 
+        legend=:topright, 
+        size=(600, 400)
     )
 
     for (i, p) in enumerate(pops)
@@ -228,9 +232,8 @@ Optionally saves figures and STTC values to disk.
 STTC is computed using a subsample of neurons (1 every 5)
 with a coincidence window of 50 ms.
 """
-function analysis(model, img_path;
+function plot_analysis(model, img_path;
         name="Baseline",
-        figs=true,
         save_figs=true,
         csv=false,
         μ=nothing,
@@ -238,21 +241,20 @@ function analysis(model, img_path;
 
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
 
-    if figs
-        rplt  = SNN.raster(model.pop, every=1, title="$name raster plot")
-        zrplt = SNN.raster(model.pop, every=1, title="$name raster plot zoomed")
-        xlims!(zrplt, 2, 2.5)
-        ylims!(zrplt, 3500, 5200)
+    
+    rplt  = SNN.raster(model.pop, every=1, title="$name raster plot")
+    zrplt = SNN.raster(model.pop, every=1, title="$name raster plot zoomed")
+    xlims!(zrplt, 2, 2.5)
+    ylims!(zrplt, 3500, 5200)
 
-        frplt = plot_firing_rates(model, name=name, colors=colors)
-        vplt  = plot_membrane_potentials(model, neurons=1, name=name, colors=colors)
+    frplt = plot_firing_rates(model, name=name, colors=colors)
+    vplt  = plot_membrane_potentials(model, neurons=1, name=name, colors=colors)
 
-        if save_figs
-            savefig(zrplt, "$img_path/$name raster_zoom.png")
-            savefig(frplt, "$img_path/$name firing_rates.png")
-            savefig(rplt,  "$img_path/$name raster_full.png")
-            savefig(vplt,  "$img_path/$name membrane_potentials_dynamic.png")
-        end
+    if save_figs
+        savefig(zrplt, "$img_path/$name raster_zoom.png")
+        savefig(frplt, "$img_path/$name firing_rates.png")
+        savefig(rplt,  "$img_path/$name raster_full.png")
+        savefig(vplt,  "$img_path/$name membrane_potentials_dynamic.png")
     end
 
     # --- STTC ---------------------------------------------------------------
@@ -269,12 +271,10 @@ function analysis(model, img_path;
         end
     end
 
-    return figs ? (rplt, zrplt, frplt, vplt) :
-                  (nothing, nothing, nothing, nothing)
+    return rplt, zrplt, frplt, vplt
 end
 
-
-function network_modifications(network, p_values, µ_values, pops_to_modify, name, img_path)
+function network_modifications(network, p_values, µ_values, pops_to_modify, name, img_path; plots=true)
     plts = nothing
     for p in p_values, µ in µ_values
         network_modified = network
@@ -286,73 +286,152 @@ function network_modifications(network, p_values, µ_values, pops_to_modify, nam
                 )
             )
         end
-        model = NetworkUtils.build_network(network_modified)
+        model = build_network(network_modified)
         monitor!(model.pop, [:v], sr=1kHz)
         Random.seed!(network_modified.seed)
         sim!(model, 3s)
-
-        rplt, zrplt, frplt, vplt = NetworkUtils.analysis(model, img_path, name = "$name p=$p µ=$µ");
-
-        plts = plot(rplt, zrplt, frplt, vplt, layout=(2,2), size=(1000,1000))
-        savefig(plts, "$img_path/$name tight_layout p=$p µ=$µ.png")
+        if plots
+            rplt, zrplt, frplt, vplt = plot_analysis(model, img_path, name = "$name p=$p µ=$µ");
+            plts = plot(rplt, zrplt, frplt, vplt, layout=(2,2), size=(1000,1000))
+            savefig(plts, "$img_path/$name tight_layout p=$p µ=$µ.png")
+        end
     end
     return plts
 end
 
-function sliding_sttc(spikes; window=200ms, step=50ms, T=3s)
-    times = 0ms:step:(T-window)
-    sttc_vals = Float64[]
 
-    for t0 in times
-        t1 = t0 + window
-        window_spikes = map(spikes) do sp
-            filter(t -> t0 ≤ t ≤ t1, sp)
-        end
+function transition_time(model;
+        pops = (:TE, :CE, :PV, :SST, :VIP),
+        dt = 20ms,
+        τ = 25ms,
+        T = 3s,
+        threshold = 15,   # in Hz
+    )
 
-        push!(sttc_vals, mean(STTC(window_spikes, 50ms)))
-    end
+    time_axis = 0ms:dt:T
+    rates = Dict{Symbol, Vector{Float64}}()
+    t = nothing
+    ce_crossing_time = nothing
 
-    return times, sttc_vals
-end
+    for p in pops
+        rates_mat, t_vec = SNN.firing_rate(
+            model.pop[p], time_axis;
+            sampling=dt, τ=τ
+        )
 
-function sliding_rate(model; window=200ms, step=50ms, T=3s)
-    times = 0ms:step:(T-window)
-    rates = Float64[]
+        # Average across neurons
+        rates[p] = vec(mean(rates_mat, dims=1))
 
-    for t0 in times
-        t1 = t0 + window
-        rate = mean([
-            count(t -> t0 ≤ t ≤ t1, sp) / (window/1s)
-            for sp in SNN.spiketimes(model.pop)
-        ])
-        push!(rates, rate)
-    end
+        # Convert ms to s
+        t = Float64.(t_vec) ./ 1000
 
-    return times, rates
-end
-
-function epileptic_onset_time(model;
-        T=3s,
-        sttc_thresh=0.6,
-        rate_thresh=15.0,
-        sustain=3)
-
-    spikes = SNN.spiketimes(model.pop)
-
-    times, sttc_vals = sliding_sttc(spikes, T=T)
-    _, rate_vals = sliding_rate(model, T=T)
-
-    # Détection soutenue (évite les faux positifs)
-    for i in 1:(length(times)-sustain)
-        if all(sttc_vals[i:i+sustain] .> sttc_thresh) &&
-           all(rate_vals[i:i+sustain] .> rate_thresh)
-            return Float64(times[i]) / 1000  # en secondes
+        # Check for apparition of epileptic-like activity in CE
+        if p == :CE
+            idx = findfirst(r -> r ≥ threshold, rates[p])
+            ce_crossing_time = idx === nothing ? nothing : t[idx]
         end
     end
 
-    return Float64(T) / 1000  # pas d’épilepsie → 3 s
+    return ce_crossing_time
 end
 
+function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path)
+
+    transition_times = Float64[]
+
+    for p in p_values
+        network_modified = network
+        for pop in pops_to_modify
+            network_modified = (; network_modified..., 
+                connections = (; 
+                    network_modified.connections..., 
+                    pop => (; network_modified.connections[pop]..., p = p)
+                )
+            )
+        end
+        model = build_network(network_modified)
+        monitor!(model.pop, [:v], sr=1kHz)
+        Random.seed!(network_modified.seed)
+        sim!(model, 3s)
+
+        t_ce = transition_time(model)
+        push!(transition_times,
+              t_ce === nothing ? NaN : t_ce)
+    end
+
+    plt = plot(
+        p_values,
+        transition_times,
+        xlabel = "p",
+        ylabel = "Transition time (s)",
+        title = "$name transition time plot",
+        legend = false,
+        size = (600, 400)
+    )
+    savefig(plt, "$img_path/$name transition_times_plot.png")
+    return plt
+end
+
+
+function heatmap_transition_time(
+        network,
+        p_values,
+        μ_values,
+        pops_to_modify,
+        name,
+        img_path;
+        T = 3s
+    )
+
+    # Matrix: rows = μ, cols = p
+    transition_times = fill(NaN, length(μ_values), length(p_values))
+
+    for (iμ, μ) in enumerate(μ_values)
+        for (ip, p) in enumerate(p_values)
+
+            # Immutable network update
+            network_modified = network
+            for pop in pops_to_modify
+                network_modified = (;
+                    network_modified...,
+                    connections = (;
+                        network_modified.connections...,
+                        pop = (;
+                            network_modified.connections[pop]...,
+                            p = p,
+                            μ = μ
+                        )
+                    )
+                )
+            end
+
+            model = build_network(network_modified)
+            monitor!(model.pop, [:fire])
+            Random.seed!(network_modified.seed)
+            sim!(model, T)
+
+            t_ce = transition_time(model)
+            display(t_ce)
+            transition_times[iμ, ip] =
+                t_ce === nothing ? NaN : t_ce
+        end
+    end
+
+    plt = heatmap(
+        p_values,
+        μ_values,
+        transition_times;
+        xlabel = "p",
+        ylabel = "μ",
+        title = "$name CE transition time",
+        colorbar_title = "Transition time (s)",
+        size = (700, 500)
+    )
+
+    savefig(plt, "$img_path/$name transition_time_heatmap.png")
+
+    return plt
+end
 
 
 end
