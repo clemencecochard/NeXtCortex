@@ -234,10 +234,7 @@ with a coincidence window of 50 ms.
 """
 function plot_analysis(model, img_path;
         name="Baseline",
-        save_figs=true,
-        csv=false,
-        μ=nothing,
-        p=nothing)
+        save_figs=true)
 
     colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue)
 
@@ -257,18 +254,13 @@ function plot_analysis(model, img_path;
         savefig(vplt,  "$img_path/$name membrane_potentials_dynamic.png")
     end
 
+
     # --- STTC ---------------------------------------------------------------
     myspikes = SNN.spiketimes(model.pop)
     sttc_value = mean(STTC(myspikes[1:5:end], 50ms))
 
-    if csv
-        open("$img_path/$name sttc_results.csv", "a") do io
-            write(io, string(μ, ",", p, ",", sttc_value, "\n"))
-        end
-    else
-        open("$img_path/$name sttc_value.txt", "w") do io
-            write(io, string(sttc_value))
-        end
+    open("$img_path/$name sttc_value.txt", "w") do io
+        write(io, string(sttc_value))
     end
 
     return rplt, zrplt, frplt, vplt
@@ -305,7 +297,7 @@ function transition_time(model;
         dt = 20ms,
         τ = 25ms,
         T = 3s,
-        threshold = 15,   # in Hz
+        threshold = 35,   # in Hz
     )
 
     time_axis = 0ms:dt:T
@@ -335,7 +327,7 @@ function transition_time(model;
     return ce_crossing_time
 end
 
-function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path)
+function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path; plots=true)
 
     transition_times = Float64[]
 
@@ -359,17 +351,88 @@ function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_
               t_ce === nothing ? NaN : t_ce)
     end
 
-    plt = plot(
-        p_values,
-        transition_times,
-        xlabel = "p",
-        ylabel = "Transition time (s)",
-        title = "$name transition time plot",
-        legend = false,
-        size = (600, 400)
-    )
-    savefig(plt, "$img_path/$name transition_times_plot.png")
-    return plt
+    if plots
+        plt = plot(
+            p_values,
+            transition_times,
+            xlabel = "p",
+            ylabel = "Transition time (s)",
+            title = "$name transition time plot",
+            legend = false,
+            size = (600, 400)
+        )
+        savefig(plt, "$img_path/$name transition_times_plot.png")
+        return plt
+    else
+        return transition_times
+    end
+end
+
+function plot_mean_transition_time_vs_p(
+    network,
+    p_values,
+    pops_to_modify,
+    name,
+    img_path;
+    plots = true,
+    n_seeds = 10
+)
+
+    mean_transition_times = Float64[]
+
+    for p in p_values
+        seed_transition_times = Float64[]
+
+        for seed in 1:n_seeds
+            # Modify network with new p
+            network_modified = network
+            for pop in pops_to_modify
+                network_modified = (; network_modified...,
+                    connections = (;
+                        network_modified.connections...,
+                        pop => (;
+                            network_modified.connections[pop]...,
+                            p = p
+                        )
+                    ),
+                    seed = seed
+                )
+            end
+
+            model = build_network(network_modified)
+            monitor!(model.pop, [:v], sr = 1kHz)
+
+            Random.seed!(network_modified.seed)
+            sim!(model, 3s)
+
+            t_ce = transition_time(model)
+            push!(seed_transition_times,
+                  t_ce === nothing ? NaN : t_ce)
+        end
+
+        # Mean over seeds (ignore NaNs)
+        mean_t = mean(skipmissing(seed_transition_times))
+        push!(mean_transition_times, mean_t)
+    end
+
+    if plots
+        plt = plot(
+            p_values,
+            mean_transition_times,
+            xlabel = "p",
+            ylabel = "Mean transition time (s)",
+            title = "$name mean transition time (n=$n_seeds)",
+            legend = false,
+            size = (600, 400),
+            lw = 2,
+            marker = :circle
+        )
+
+        savefig(plt, "$img_path/$name_mean_transition_times_plot.png")
+        return plt
+    else
+        return mean_transition_times
+    end
 end
 
 
@@ -433,5 +496,23 @@ function heatmap_transition_time(
     return plt
 end
 
+
+function heatmap_transition_time_test(network, p_values, μ_values, pops_to_modify, name, img_path)
+    transition_times = Vector{Vector{Float64}}()
+    for µ in μ_values
+        network_modified = network
+        for pop in pops_to_modify
+            network_modified = (; network_modified..., 
+                connections = (; 
+                    network_modified.connections..., 
+                    pop => (; network_modified.connections[pop]..., µ = µ)
+                )
+            )
+        end
+        push!(transition_times,
+              plot_transition_time_vs_p(network_modified, p_values, pops_to_modify, name, img_path; plots=false))
+    end
+    return transition_times
+end
 
 end
