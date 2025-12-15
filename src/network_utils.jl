@@ -182,7 +182,7 @@ Spike times are overlaid on the membrane potential traces.
 """
 function plot_membrane_potentials(model;
         pops = (:TE, :CE, :PV, :SST, :VIP),
-        neurons = 1:5,
+        neurons = 1,
         legend = false,
         name = "",
         colors = (:darkorange, :darkgreen, :purple, :darkcyan, :darkblue))
