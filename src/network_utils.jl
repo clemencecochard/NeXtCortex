@@ -266,6 +266,32 @@ function plot_analysis(model, img_path;
     return rplt, zrplt, frplt, vplt
 end
 
+"""
+    network_modifications(network, p_values, µ_values, pops_to_modify, name, img_path; plots=true)
+
+Systematically modify network connectivity parameters and simulate the resulting models.
+
+For each combination of connection probability `p` and mean synaptic weight `µ`,
+the function:
+1. Updates the specified populations' connectivity parameters
+2. Builds a new network
+3. Runs a simulation
+4. Optionally performs a full analysis and saves plots
+
+### Parameters
+- `network`: base network configuration (`NamedTuple`)
+- `p_values`: iterable of connection probabilities to test
+- `µ_values`: iterable of mean synaptic weights to test
+- `pops_to_modify`: populations whose connections are modified
+- `name`: label prefix for plots and files
+- `img_path`: directory where outputs are saved
+
+### Keyword arguments
+- `plots`: whether to generate and save analysis plots (default: `true`)
+
+### Returns
+- `plts`: combined plot object of the last simulation (or `nothing` if `plots=false`)
+"""
 function network_modifications(network, p_values, µ_values, pops_to_modify, name, img_path; plots=true)
     plts = nothing
     for p in p_values, µ in µ_values
@@ -291,7 +317,26 @@ function network_modifications(network, p_values, µ_values, pops_to_modify, nam
     return plts
 end
 
+"""
+    transition_time(model; kwargs...) -> Union{Float64, Nothing}
 
+Compute the time at which excitatory cortical activity crosses a firing-rate threshold.
+
+Population-averaged firing rates are computed using a smoothed sliding window.
+The transition time is defined as the first time point at which the CE population
+exceeds the specified firing-rate threshold.
+
+### Keyword arguments
+- `pops`: populations to analyze
+- `dt`: sampling interval for firing-rate computation
+- `τ`: smoothing time constant
+- `T`: total simulation duration
+- `threshold`: firing-rate threshold in Hz
+
+### Returns
+- Transition time in seconds if threshold is crossed
+- `nothing` if no transition occurs
+"""
 function transition_time(model;
         pops = (:TE, :CE, :PV, :SST, :VIP),
         dt = 20ms,
@@ -327,6 +372,28 @@ function transition_time(model;
     return ce_crossing_time
 end
 
+"""
+    plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path; plots=true)
+
+Evaluate and plot transition times as a function of connection probability `p`.
+
+For each value of `p`, the network is rebuilt, simulated, and analyzed to determine
+the transition time of CE activity.
+
+### Parameters
+- `network`: base network configuration
+- `p_values`: iterable of connection probabilities
+- `pops_to_modify`: populations whose connections are modified
+- `name`: label prefix for plots
+- `img_path`: directory for saved figures
+
+### Keyword arguments
+- `plots`: whether to generate and save a plot (default: `true`)
+
+### Returns
+- Plot object if `plots=true`
+- Vector of transition times otherwise
+"""
 function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path; plots=true)
 
     transition_times = Float64[]
@@ -368,6 +435,31 @@ function plot_transition_time_vs_p(network, p_values, pops_to_modify, name, img_
     end
 end
 
+"""
+    plot_mean_transition_time_vs_p(network, p_values, pops_to_modify, name, img_path; kwargs...)
+
+Compute and plot mean transition times across multiple random seeds.
+
+For each value of `p`, the network is simulated multiple times with different seeds.
+Transition times are averaged across runs, ignoring failed (NaN) transitions.
+
+This function has never been used completely due to a lack of computer power to run it in less than hours.
+
+### Parameters
+- `network`: base network configuration
+- `p_values`: iterable of connection probabilities
+- `pops_to_modify`: populations whose connections are modified
+- `name`: label prefix for plots
+- `img_path`: directory for saved figures
+
+### Keyword arguments
+- `plots`: whether to generate and save a plot (default: `true`)
+- `n_seeds`: number of random seeds per `p` value (default: 10)
+
+### Returns
+- Plot object if `plots=true`
+- Vector of mean transition times otherwise
+"""
 function plot_mean_transition_time_vs_p(
     network,
     p_values,
@@ -435,68 +527,26 @@ function plot_mean_transition_time_vs_p(
     end
 end
 
+"""
+    heatmap_transition_time_test(network, p_values, μ_values, pops_to_modify, name, img_path)
 
-function heatmap_transition_time(
-        network,
-        p_values,
-        μ_values,
-        pops_to_modify,
-        name,
-        img_path;
-        T = 3s
-    )
+Compute transition times over a grid of synaptic parameters.
 
-    # Matrix: rows = μ, cols = p
-    transition_times = fill(NaN, length(μ_values), length(p_values))
+For each value of mean synaptic weight `µ`, transition times are computed as a
+function of connection probability `p`. This output was meant to be used for heatmap
+visualization but we never achieved to compute proper heatmap.
 
-    for (iμ, μ) in enumerate(μ_values)
-        for (ip, p) in enumerate(p_values)
+### Parameters
+- `network`: base network configuration
+- `p_values`: iterable of connection probabilities
+- `μ_values`: iterable of mean synaptic weights
+- `pops_to_modify`: populations whose connections are modified
+- `name`: label prefix
+- `img_path`: directory for saved outputs
 
-            # Immutable network update
-            network_modified = network
-            for pop in pops_to_modify
-                network_modified = (;
-                    network_modified...,
-                    connections = (;
-                        network_modified.connections...,
-                        pop = (;
-                            network_modified.connections[pop]...,
-                            p = p,
-                            μ = μ
-                        )
-                    )
-                )
-            end
-
-            model = build_network(network_modified)
-            monitor!(model.pop, [:fire])
-            Random.seed!(network_modified.seed)
-            sim!(model, T)
-
-            t_ce = transition_time(model)
-            display(t_ce)
-            transition_times[iμ, ip] =
-                t_ce === nothing ? NaN : t_ce
-        end
-    end
-
-    plt = heatmap(
-        p_values,
-        μ_values,
-        transition_times;
-        xlabel = "p",
-        ylabel = "μ",
-        title = "$name CE transition time",
-        colorbar_title = "Transition time (s)",
-        size = (700, 500)
-    )
-
-    savefig(plt, "$img_path/$name transition_time_heatmap.png")
-
-    return plt
-end
-
-
+### Returns
+- Nested vector of transition times indexed by `(µ, p)`
+"""
 function heatmap_transition_time_test(network, p_values, μ_values, pops_to_modify, name, img_path)
     transition_times = Vector{Vector{Float64}}()
     for µ in μ_values
